@@ -1,9 +1,9 @@
 name = "mpesa-prompt"
-main = "src/worker.js"
+main = "worker.js"
 compatibility_date = "2025-01-01"
 
 [assets]
-directory = "./public"
+directory = "./"
 run_worker_first = ["/api/*", "/telegram/*"]
 
 [[d1_databases]]
