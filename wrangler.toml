@@ -13,4 +13,4 @@ database_name = "mpesaprompt"
 database_id = "6a4d1665-c312-4474-8129-225849eff8fa"
 
 [vars]
-BOT_USERNAME = "your_bot_username"
+BOT_USERNAME = "Mpesapromptbot"
