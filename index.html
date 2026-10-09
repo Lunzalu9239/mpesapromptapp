@@ -81,6 +81,7 @@ dl div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-
 .row a{font-size:.8rem}
 .lock{gap:18px}.pd{display:flex;gap:14px}.pd i{width:16px;height:16px;border-radius:50%;border:2px solid #fff}.pd i.on{background:#fff}
 .kp{display:grid;grid-template-columns:repeat(3,76px);gap:14px}.kp button{height:76px;border-radius:50%;border:0;background:#ffffff26;color:#fff;font-size:1.6rem;font-weight:700}.kp button:active{background:#ffffff55}
+.sheet.g{text-align:left;max-height:86vh;overflow:auto}.gd p{margin:0 0 12px;font-size:.92rem}.gd small{margin-bottom:10px}
 </style></head>
 <body><div id="app"></div>
 <script>
@@ -158,6 +159,17 @@ async function bioOn(){try{const c=await navigator.credentials.create({publicKey
 function bioOff(){localStorage.removeItem('lockbio');shell('me')}
 async function pinOn(){const a=$('#p1').value,b=$('#p2').value;if(!/^\d{4}$/.test(a))return toast('Use exactly 4 digits.');if(a!==b)return toast('The PINs do not match.');localStorage.lockpin=await sha(a);toast('PIN lock is on','ok');shell('me')}
 async function pinOff(){const p=prompt('Enter your current PIN to turn off the lock');if(p&&await sha(p)===LK()){localStorage.removeItem('lockpin');localStorage.removeItem('lockbio');shell('me')}else if(p!==null)toast('Wrong PIN')}
+
+function guide(){const L=(u,t)=>`<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
+ const o=modal(`<h2>Get your Daraja details</h2><div class="gd">
+<p><b>1. Create a Daraja account</b><br>Sign up with your email at ${L('https://daraja.safaricom.co.ke','the Daraja portal')}.</p>
+<p><b>2. Create an app</b><br>Open ${L('https://daraja.safaricom.co.ke/dashboard/myapps','My Apps')}, create an app and tick M-Pesa Express. Your <b>Consumer key</b> and <b>Consumer secret</b> are shown on the app page. Copy each one into the matching box here.</p>
+<p><b>3. Test first (Sandbox)</b><br>The test <b>Passkey</b> and test shortcode are on the ${L('https://developer.safaricom.co.ke/apis/MpesaExpressSimulate','M-Pesa Express page')}, in the test data section. Choose Sandbox here, Paybill, and paste them in. No real money moves.</p>
+<p><b>4. Go Live for real payments</b><br>On the portal, open your app and tap <b>Go Live</b>. You need a live Paybill or Till with a Business Admin or Manager user. Once approved, Safaricom gives you live keys (different from the test ones) and emails your live <b>Passkey</b>.</p>
+<p><b>5. Which number goes where</b><br><b>Paybill:</b> your Paybill number, then your Account number.<br><b>Till:</b> your Store (Head Office) number, the one used to go live, then your Till number.</p>
+<p><b>6. Finish</b><br>Choose Live, paste the live details, and tap Save and verify. The app tests the keys with Safaricom straight away.</p>
+<small>Safaricom sometimes renames pages. If a link looks different, search the portal for "M-Pesa Express" or ask Safaricom business support.</small></div><button class="btn">Got it</button>`);
+ o.firstChild.classList.add('g');o.querySelector('button').onclick=()=>o.remove()}
 function lockCard(){const on=!!LK(),bio=!!localStorage.lockbio;
  return `<div class="card"><h2>App lock</h2>${on?`<small>PIN lock is on. The app locks after 30 seconds away.</small>${window.PublicKeyCredential?`<button class="btn soft" onclick="${bio?'bioOff()':'bioOn()'}">${bio?'Turn off fingerprint':'Use fingerprint'}</button>`:''}<button class="btn ghost" onclick="pinOff()">Turn off lock</button>`:'<small>Ask for a PIN when the app opens. You can add your fingerprint after.</small><input id="p1" type="password" inputmode="numeric" maxlength="4" placeholder="New 4-digit PIN"><input id="p2" type="password" inputmode="numeric" maxlength="4" placeholder="Confirm PIN"><button class="btn" onclick="pinOn()">Turn on PIN lock</button>'}</div>`}
 
@@ -189,14 +201,14 @@ const seg=(n,o,v)=>o.map(a=>`<label><input type="radio" name="${n}" value="${a[0
 function lab(){const t=document.querySelector('[name=type]:checked').value;$('#l1').textContent=t==='till'?'Store number (Head Office)':'Paybill number';$('#l2').textContent=t==='till'?'Till number':'Account number'}
 views.me=()=>{const own=me.role==='owner',s=me.settings||{env:'sandbox',type:'paybill'},ph=s.saved?'•••••• saved. Leave blank to keep':'',rq=s.saved?'':'required';
  $('#v').innerHTML=`<div class="card"><small>Signed in as ${own?'owner':'staff'}</small><b>${esc(me.email)}</b></div>
-${own?`<form class="card" onsubmit="save(event)"><h2>Daraja details</h2>
+${own?`<form class="card" onsubmit="save(event)"><h2>Daraja details</h2><button type="button" class="btn soft" onclick="guide()">How do I get these details?</button>
 <div class="seg">${seg('env',[['sandbox','Sandbox (testing)'],['live','Live']],s.env)}</div>
 <div class="seg">${seg('type',[['paybill','Paybill'],['till','Till']],s.type)}</div>
 <label><span id="l1"></span><input name="shortcode" inputmode="numeric" value="${esc(s.shortcode)}" required></label>
 <label><span id="l2"></span><input name="account" value="${esc(s.account)}" required></label>
-<label>Consumer key<input name="key" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
-<label>Consumer secret<input name="secret" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
-<label>Passkey<input name="passkey" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
+<label>Consumer key<small>On your app page in the Daraja portal</small><input name="key" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
+<label>Consumer secret<small>Next to the key on the same page</small><input name="secret" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
+<label>Passkey<small>Sandbox: test data page. Live: emailed after Go Live</small><input name="passkey" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
 <button class="btn" id="sv">Save and verify</button>
 <small>${me.verified?'Verified. You can send prompts.':'Prompts unlock once your details are verified.'}</small></form>
 <div class="card"><h2>Staff</h2><div id="stf"><small>Loading…</small></div></div>`:'<div class="card"><small>Payment details are managed by the business owner. Everything you send goes into the shared business till.</small></div>'}
