@@ -83,6 +83,9 @@ dl div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-
 .kp{display:grid;grid-template-columns:repeat(3,76px);gap:14px}.kp button{height:76px;border-radius:50%;border:0;background:#ffffff26;color:#fff;font-size:1.6rem;font-weight:700}.kp button:active{background:#ffffff55}
 .sheet.g{text-align:left;max-height:86vh;overflow:auto}.gd p{margin:0 0 12px;font-size:.92rem}.gd small{margin-bottom:10px}
 label.sw{flex-direction:row;align-items:center;justify-content:space-between;gap:12px}.sw input{width:auto;transform:scale(1.4);accent-color:var(--g)}
+select{border:1.5px solid #cfe3d6;border-radius:12px;padding:13px 12px;background:#fbfefc;color:var(--ink);width:100%;font:inherit}input[type=range]{padding:0;accent-color:var(--g)}
+.sr{display:flex;gap:10px;align-items:flex-end}.sr label{flex:1}.pvb{width:48px;height:48px;border-radius:12px;border:0;background:var(--gl);color:var(--gd);font-size:1rem;flex:none;cursor:pointer}
+a.btn{display:block;text-align:center;text-decoration:none}.two{display:flex;gap:10px;margin-top:8px}.two .btn{flex:1;padding:13px}
 </style></head>
 <body><div id="app"></div>
 <script>
@@ -102,9 +105,17 @@ const pickTab=()=>me.verified||me.role==='staff'?'pay':'me';
 
 /* sound + cards */
 let ac;const unlock=()=>{ac=ac||new(window.AudioContext||window.webkitAudioContext)();ac.resume()};
-function tone(k){if(localStorage.mute||!ac)return;const n={success:[[523,0],[659,.16]],cancelled:[[440,0],[392,.2]],failed:[[262,0],[220,.22]]}[k];
- n.forEach(([f,t])=>{const o=ac.createOscillator(),g=ac.createGain(),a=ac.currentTime+t;o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(.0001,a);g.gain.exponentialRampToValueAtTime(.12,a+.03);g.gain.exponentialRampToValueAtTime(.0001,a+.4);o.connect(g).connect(ac.destination);o.start(a);o.stop(a+.42)});
- navigator.vibrate&&navigator.vibrate({success:[50],cancelled:[40,60,40],failed:[160]}[k])}
+const TONES={chime:['Soft chime',[[523,0],[659,.16]]],harp:['Harp',[[392,0],[494,.11],[587,.22],[784,.33]]],bell:['Bell',[[880,0,.9],[1320,0,.5]]],drop:['Water drop',[[1100,0,.15],[740,.09,.25]]],ding:['Ding',[[660,0,.6]]],pop:['Double pop',[[600,0,.12],[600,.17,.12]]],marimba:['Marimba',[[523,0,.25,'triangle'],[659,.14,.25,'triangle'],[523,.28,.3,'triangle']]],bubble:['Bubbles',[[300,0,.1],[500,.08,.12],[700,.16,.14]]],fall:['Gentle fall',[[440,0],[392,.2]]],sigh:['Low sigh',[[330,0,.5],[262,.22,.55]]],low:['Low tone',[[262,0],[220,.22]]],knock:['Soft knock',[[180,0,.12,'triangle'],[180,.16,.12,'triangle']]]};
+const CLICKS={tick:['Tick',[1800,.03,'sine']],soft:['Soft tap',[900,.04,'sine']],pop:['Pop',[520,.07,'sine',260]],wood:['Wood',[320,.05,'triangle']],drip:['Drip',[1300,.08,'sine',650]],key:['Key',[700,.03,'square']]};
+const SND_DEF={success:'chime',cancelled:'fall',failed:'low',click:'soft',vol:50};
+const sn=()=>{try{return{...SND_DEF,...JSON.parse(localStorage.snd||'{}')}}catch{return SND_DEF}};
+const setSn=(k,v)=>{const s=sn();s[k]=v;localStorage.snd=JSON.stringify(s)};
+const peak=()=>Math.max(.0003,sn().vol/100*.25);
+function note(f,t,d,type,g0,fe){const o=ac.createOscillator(),g=ac.createGain(),a=ac.currentTime+t;o.type=type||'sine';o.frequency.setValueAtTime(f,a);if(fe)o.frequency.exponentialRampToValueAtTime(fe,a+d);g.gain.setValueAtTime(.0001,a);g.gain.exponentialRampToValueAtTime(g0,a+.02);g.gain.exponentialRampToValueAtTime(.0001,a+d);o.connect(g).connect(ac.destination);o.start(a);o.stop(a+d+.03)}
+function tone(k,quiet){if(localStorage.mute)return;if(!quiet&&navigator.vibrate)navigator.vibrate({success:[50],cancelled:[40,60,40],failed:[160]}[k]||0);
+ const s=sn(),t=TONES[s[k]];if(!ac||!t||s.vol==0)return;t[1].forEach(([f,at,d,y])=>note(f,at,d||.4,y,peak()))}
+function clickSnd(){if(localStorage.mute)return;const s=sn(),c=CLICKS[s.click];if(!c||s.vol==0)return;unlock();const[f,d,y,fe]=c[1];if(ac)note(f,0,d,y,y==='square'?peak()*.3:peak()*.8,fe)}
+document.addEventListener('click',e=>{if(e.target.closest('button,a,.row,.seg span')&&!e.target.closest('.pvb'))clickSnd()},true);
 function modal(h){const o=document.createElement('div');o.className='ov';o.onclick=e=>e.target===o&&o.remove();o.innerHTML=`<div class="sheet" role="dialog">${h}</div>`;document.body.append(o);return o}
 function result(t,quiet){if(!quiet)tone(t.status);
  const m={success:['✓','Payment successful','ok'],cancelled:['✕','Prompt cancelled','warn'],failed:['!','Payment failed','bad']}[t.status]||['…','Waiting for customer','warn'];
@@ -136,7 +147,7 @@ ${pw?'<label>Confirm password<input name="confirm" type="password" minlength="8"
 ${reg?'<label>Staff invite code <small>Only if you are joining a shop. Leave empty to start your own.</small><input name="invite" autocapitalize="characters" autocomplete="off"></label>':''}
 <button class="btn" id="ab">${fg?'Reset password':reg?'Create account':'Sign in'}</button>
 ${mode==='login'?'<small style="text-align:center"><a onclick="auth(\'forgot\')">Forgot password?</a></small>':''}
-<small style="text-align:center">${pw?'Have an account?':'New here?'} <a onclick="auth('${pw?'login':'register'}')">${pw?'Sign in':'Create an account'}</a></small></form>`}
+<small style="text-align:center">${pw?'Have an account?':'New here?'} <a onclick="auth('${pw?'login':'register'}')">${pw?'Sign in':'Create an account'}</a></small><small style="text-align:center">Need help? <a href="tel:+254703719381">Call</a> or <a href="https://wa.me/254703719381" target="_blank" rel="noopener">WhatsApp</a></small></form>`}
 async function doAuth(e,mode){e.preventDefault();const b=$('#ab');b.disabled=true;
  try{const r=await api('/api/'+(mode==='forgot'?'reset':mode),{b:Object.fromEntries(new FormData(e.target))});
   if(mode==='forgot')return info('Password changed',r.recovery,'This is your new recovery code. The old one no longer works. Keep it safe.',()=>auth('login'));
@@ -170,9 +181,16 @@ function guide(){
  o.firstChild.classList.add('g');o.querySelector('button').onclick=()=>o.remove()}
 async function resend(t){unlock();try{const{id}=await api('/api/pay',{b:{phone:t.phone,amount:t.amount,ref:t.ref}});if(cur!=='pay')shell('pay');
  $('#live').innerHTML='<div class="card wait"><div class="spin"></div><div><b>Prompt sent again</b><small>Waiting for the customer to enter their PIN</small></div></div>';poll(id)}catch(x){toast(x.message)}}
-function soundCard(){const on=!localStorage.mute;return `<div class="card"><h2>Notifications</h2><label class="sw"><span>Sound and vibration<small>Soft tones for successful, cancelled and failed payments</small></span><input type="checkbox" ${on?'checked':''} onchange="setSound(this.checked)"></label><button class="btn soft" onclick="preview()">Play sample tones</button></div>`}
-function setSound(on){on?localStorage.removeItem('mute'):localStorage.mute=1;unlock();if(on)tone('success')}
-function preview(){if(localStorage.mute)return toast('Sound is turned off');unlock();tone('success');setTimeout(()=>tone('cancelled'),900);setTimeout(()=>tone('failed'),1800)}
+const opts=(m,cur)=>`<option value="off" ${cur==='off'?'selected':''}>Off</option>`+Object.entries(m).map(([k,v])=>`<option value="${k}" ${k===cur?'selected':''}>${v[0]}</option>`).join('');
+function prev(k){if(localStorage.mute)return toast('Sound is turned off');unlock();k==='click'?clickSnd():tone(k,1)}
+function setSound(on){on?localStorage.removeItem('mute'):localStorage.mute=1;unlock();if(on)tone('success',1)}
+function soundCard(){const s=sn(),on=!localStorage.mute;
+ const row=(k,l,m)=>`<div class="sr"><label>${l}<select onchange="setSn('${k}',this.value);prev('${k}')">${opts(m,s[k])}</select></label><button type="button" class="pvb" onclick="prev('${k}')" aria-label="Play ${l}">&#9654;</button></div>`;
+ return `<div class="card"><h2>Sounds</h2><label class="sw"><span>Sound and vibration<small>Soft tones for each payment result</small></span><input type="checkbox" ${on?'checked':''} onchange="setSound(this.checked)"></label>
+<label>Volume<input type="range" min="0" max="100" value="${s.vol}" oninput="setSn('vol',+this.value)" onchange="prev('success')"></label>
+${row('success','Successful payment',TONES)}${row('cancelled','Cancelled payment',TONES)}${row('failed','Failed payment',TONES)}${row('click','Button click',CLICKS)}</div>`}
+function helpCard(){const n=[['0703 719 381','254703719381'],['0104 510 021','254104510021']];
+ return `<div class="card"><h2>Need help?</h2><small>Call or message us on WhatsApp.</small>${n.map(x=>`<div><b>${x[0]}</b><div class="two"><a class="btn" href="tel:+${x[1]}">Call</a><a class="btn soft" href="https://wa.me/${x[1]}?text=Hello%2C%20I%20need%20help%20with%20PayPrompt" target="_blank" rel="noopener">WhatsApp</a></div></div>`).join('')}</div>`}
 function installCard(){return `<div class="card"><h2>Install app</h2>${deferred?'<small>Add PayPrompt to your home screen so it opens like a normal app.</small><button class="btn" onclick="doInstall()">Install app</button>':'<small>Open your browser menu and choose <b>Install app</b> or <b>Add to Home screen</b>. On iPhone: Share, then Add to Home Screen.</small>'}</div>`}
 function lockCard(){const on=!!LK(),bio=!!localStorage.lockbio;
  return `<div class="card"><h2>App lock</h2>${on?`<small>PIN lock is on. The app locks after 30 seconds away.</small>${window.PublicKeyCredential?`<button class="btn soft" onclick="${bio?'bioOff()':'bioOn()'}">${bio?'Turn off fingerprint':'Use fingerprint'}</button>`:''}<button class="btn ghost" onclick="pinOff()">Turn off lock</button>`:'<small>Ask for a PIN when the app opens. You can add your fingerprint after.</small><input id="p1" type="password" inputmode="numeric" maxlength="4" placeholder="New 4-digit PIN"><input id="p2" type="password" inputmode="numeric" maxlength="4" placeholder="Confirm PIN"><button class="btn" onclick="pinOn()">Turn on PIN lock</button>'}</div>`}
@@ -218,7 +236,7 @@ ${own?`<form class="card" onsubmit="save(event)"><h2>Daraja details</h2><button 
 <div class="card"><h2>Staff</h2><div id="stf"><small>Loading…</small></div></div>`:'<div class="card"><small>Payment details are managed by the business owner. Everything you send goes into the shared business till.</small></div>'}
 ${standalone?'':installCard()}${soundCard()}${lockCard()}
 <div class="card"><h2>Telegram</h2>${me.telegram?'<small>Connected. Send your bot a message like <b>0712345678 500</b> to prompt a customer, and it replies with the result and your total today.</small><button class="btn ghost" onclick="tgOff()">Disconnect</button>':'<small>Connect your Telegram to send prompts from the bot and get results there.</small><button class="btn" onclick="tgOn()">Connect Telegram</button>'}</div>
-<button class="btn ghost" onclick="logout()">Sign out</button>`;if(own){lab();loadStaff()}};
+${helpCard()}<button class="btn ghost" onclick="logout()">Sign out</button>`;if(own){lab();loadStaff()}};
 async function loadStaff(){try{const{invite,staff}=await api('/api/staff');$('#stf').innerHTML=`<small>Share this code with a staff member. They enter it when creating their account, and their prompts go into your business.</small><div class="code">${invite?esc(invite):'No code yet'}</div><button class="btn soft" onclick="newInvite()">${invite?'Make a new code':'Create invite code'}</button>${staff.length?staff.map(s=>`<div class="row" style="cursor:default"><div><b>${esc(s.email)}</b></div><a onclick="stReset(${s.id})">Reset password</a><a style="color:var(--red)" onclick="stDel(${s.id})">Remove</a></div>`).join(''):'<small>No staff yet.</small>'}`}catch{}}
 async function newInvite(){await api('/api/staff/invite',{b:{}});loadStaff()}
 async function stReset(id){const r=await api('/api/staff/reset',{b:{id}});info('Temporary password',r.temp,'Give this to your staff member. They sign in with it, and their old sessions are signed out.')}
