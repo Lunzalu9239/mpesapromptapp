@@ -93,7 +93,7 @@ const api=async(p,o={})=>{const r=await fetch(p,{method:o.m||(o.b?'POST':'GET'),
 const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
 let me=null,deferred=null,cur='pay',locked=false,hiddenAt=0,pin='';
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
-addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;if($('.splash'))install()});
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;if($('.splash'))install();else if(me&&cur==='me'&&!locked)shell('me')});
 addEventListener('appinstalled',()=>{app.innerHTML='<div class="intro splash"><div class="logo">✓</div><h1>App installed</h1><p>Open PayPrompt from your home screen to get started.</p></div>'});
 addEventListener('visibilitychange',async()=>{if(document.hidden){hiddenAt=Date.now();return}
  if(!me||locked)return;if(LK()&&Date.now()-hiddenAt>30000)return lockScreen();
@@ -173,6 +173,7 @@ async function resend(t){unlock();try{const{id}=await api('/api/pay',{b:{phone:t
 function soundCard(){const on=!localStorage.mute;return `<div class="card"><h2>Notifications</h2><label class="sw"><span>Sound and vibration<small>Soft tones for successful, cancelled and failed payments</small></span><input type="checkbox" ${on?'checked':''} onchange="setSound(this.checked)"></label><button class="btn soft" onclick="preview()">Play sample tones</button></div>`}
 function setSound(on){on?localStorage.removeItem('mute'):localStorage.mute=1;unlock();if(on)tone('success')}
 function preview(){if(localStorage.mute)return toast('Sound is turned off');unlock();tone('success');setTimeout(()=>tone('cancelled'),900);setTimeout(()=>tone('failed'),1800)}
+function installCard(){return `<div class="card"><h2>Install app</h2>${deferred?'<small>Add PayPrompt to your home screen so it opens like a normal app.</small><button class="btn" onclick="doInstall()">Install app</button>':'<small>Open your browser menu and choose <b>Install app</b> or <b>Add to Home screen</b>. On iPhone: Share, then Add to Home Screen.</small>'}</div>`}
 function lockCard(){const on=!!LK(),bio=!!localStorage.lockbio;
  return `<div class="card"><h2>App lock</h2>${on?`<small>PIN lock is on. The app locks after 30 seconds away.</small>${window.PublicKeyCredential?`<button class="btn soft" onclick="${bio?'bioOff()':'bioOn()'}">${bio?'Turn off fingerprint':'Use fingerprint'}</button>`:''}<button class="btn ghost" onclick="pinOff()">Turn off lock</button>`:'<small>Ask for a PIN when the app opens. You can add your fingerprint after.</small><input id="p1" type="password" inputmode="numeric" maxlength="4" placeholder="New 4-digit PIN"><input id="p2" type="password" inputmode="numeric" maxlength="4" placeholder="Confirm PIN"><button class="btn" onclick="pinOn()">Turn on PIN lock</button>'}</div>`}
 
@@ -215,7 +216,7 @@ ${own?`<form class="card" onsubmit="save(event)"><h2>Daraja details</h2><button 
 <button class="btn" id="sv">Save and verify</button>
 <small>${me.verified?'Verified. You can send prompts.':'Prompts unlock once your details are verified.'}</small></form>
 <div class="card"><h2>Staff</h2><div id="stf"><small>Loading…</small></div></div>`:'<div class="card"><small>Payment details are managed by the business owner. Everything you send goes into the shared business till.</small></div>'}
-${soundCard()}${lockCard()}
+${standalone?'':installCard()}${soundCard()}${lockCard()}
 <div class="card"><h2>Telegram</h2>${me.telegram?'<small>Connected. Send your bot a message like <b>0712345678 500</b> to prompt a customer, and it replies with the result and your total today.</small><button class="btn ghost" onclick="tgOff()">Disconnect</button>':'<small>Connect your Telegram to send prompts from the bot and get results there.</small><button class="btn" onclick="tgOn()">Connect Telegram</button>'}</div>
 <button class="btn ghost" onclick="logout()">Sign out</button>`;if(own){lab();loadStaff()}};
 async function loadStaff(){try{const{invite,staff}=await api('/api/staff');$('#stf').innerHTML=`<small>Share this code with a staff member. They enter it when creating their account, and their prompts go into your business.</small><div class="code">${invite?esc(invite):'No code yet'}</div><button class="btn soft" onclick="newInvite()">${invite?'Make a new code':'Create invite code'}</button>${staff.length?staff.map(s=>`<div class="row" style="cursor:default"><div><b>${esc(s.email)}</b></div><a onclick="stReset(${s.id})">Reset password</a><a style="color:var(--red)" onclick="stDel(${s.id})">Remove</a></div>`).join(''):'<small>No staff yet.</small>'}`}catch{}}
