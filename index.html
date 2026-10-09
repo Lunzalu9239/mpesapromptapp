@@ -73,6 +73,14 @@ dl div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-
 .toast{position:fixed;top:calc(12px + env(safe-area-inset-top));left:14px;right:14px;max-width:460px;margin:auto;background:#3a1411;color:#fff;padding:13px 16px;border-radius:14px;z-index:30;animation:fade .2s;font-weight:600}.toast.ok{background:var(--gd)}
 @keyframes fade{from{opacity:0}}@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.btn.soft{background:var(--gl);color:var(--gd);box-shadow:none}
+.today{background:linear-gradient(135deg,#12c26a,#006f37);color:#fff;border-radius:var(--r);padding:16px 18px;display:flex;justify-content:space-between;align-items:flex-end}
+.today small{color:#ffffffcc}.today b{font-size:1.8rem;display:block;line-height:1.2}
+.code{font:700 1.15rem ui-monospace,Menlo,monospace;letter-spacing:.06em;background:var(--bg);border-radius:12px;padding:13px;text-align:center;word-break:break-all;color:var(--gd)}
+.amr{text-align:right;flex:none!important}.amr b{display:block}
+.row a{font-size:.8rem}
+.lock{gap:18px}.pd{display:flex;gap:14px}.pd i{width:16px;height:16px;border-radius:50%;border:2px solid #fff}.pd i.on{background:#fff}
+.kp{display:grid;grid-template-columns:repeat(3,76px);gap:14px}.kp button{height:76px;border-radius:50%;border:0;background:#ffffff26;color:#fff;font-size:1.6rem;font-weight:700}.kp button:active{background:#ffffff55}
 </style></head>
 <body><div id="app"></div>
 <script>
@@ -81,50 +89,83 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const fmt=n=>Number(n).toLocaleString('en-KE');
 const api=async(p,o={})=>{const r=await fetch(p,{method:o.m||(o.b?'POST':'GET'),headers:{'content-type':'application/json'},body:o.b&&JSON.stringify(o.b)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(d.error||'Something went wrong'),{status:r.status});return d};
 const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
-let me=null,deferred=null,cur='pay';
+let me=null,deferred=null,cur='pay',locked=false,hiddenAt=0,pin='';
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;if($('.splash'))install()});
-addEventListener('appinstalled',()=>{app.innerHTML=`<div class="intro splash"><div class="logo">✓</div><h1>App installed</h1><p>Open PayPrompt from your home screen to get started.</p></div>`});
-addEventListener('visibilitychange',async()=>{if(!document.hidden&&me&&cur==='me'){me=await api('/api/me');shell('me')}});
+addEventListener('appinstalled',()=>{app.innerHTML='<div class="intro splash"><div class="logo">✓</div><h1>App installed</h1><p>Open PayPrompt from your home screen to get started.</p></div>'});
+addEventListener('visibilitychange',async()=>{if(document.hidden){hiddenAt=Date.now();return}
+ if(!me||locked)return;if(LK()&&Date.now()-hiddenAt>30000)return lockScreen();
+ if(cur==='me'){me=await api('/api/me');shell('me')}});
+const pickTab=()=>me.verified||me.role==='staff'?'pay':'me';
 
-/* sound + notifications */
+/* sound + cards */
 let ac;const unlock=()=>{ac=ac||new(window.AudioContext||window.webkitAudioContext)();ac.resume()};
 function tone(k){if(!ac)return;const n={success:[[523,0],[659,.14],[784,.28],[1047,.42]],cancelled:[[440,0],[330,.22]],failed:[[220,0],[196,.2],[150,.4]]}[k];
  n.forEach(([f,t])=>{const o=ac.createOscillator(),g=ac.createGain(),a=ac.currentTime+t;o.type=k==='failed'?'sawtooth':k==='cancelled'?'triangle':'sine';o.frequency.value=f;g.gain.setValueAtTime(.0001,a);g.gain.exponentialRampToValueAtTime(.25,a+.03);g.gain.exponentialRampToValueAtTime(.0001,a+.24);o.connect(g).connect(ac.destination);o.start(a);o.stop(a+.26)});
  navigator.vibrate&&navigator.vibrate({success:[90],cancelled:[60,60,60],failed:[350]}[k])}
+function modal(h){const o=document.createElement('div');o.className='ov';o.onclick=e=>e.target===o&&o.remove();o.innerHTML=`<div class="sheet" role="dialog">${h}</div>`;document.body.append(o);return o}
 function result(t,quiet){if(!quiet)tone(t.status);
  const m={success:['✓','Payment successful','ok'],cancelled:['✕','Prompt cancelled','warn'],failed:['!','Payment failed','bad']}[t.status]||['…','Waiting for customer','warn'];
- const rows=[['Amount','KES '+fmt(t.amount)],['Phone',t.phone],t.receipt&&['M-Pesa receipt',t.receipt],t.ref&&['Reference',t.ref],['Time',new Date(t.created_at).toLocaleString()],['Result',t.message]].filter(Boolean);
- const o=document.createElement('div');o.className='ov';o.onclick=e=>e.target===o&&o.remove();
- o.innerHTML=`<div class="sheet" role="dialog" aria-live="assertive"><div class="ico ${m[2]}">${m[0]}</div><h2>${m[1]}</h2><div class="amt">KES ${fmt(t.amount)}</div><dl>${rows.map(r=>`<div><dt>${r[0]}</dt><dd>${esc(r[1])}</dd></div>`).join('')}</dl><button class="btn">Done</button></div>`;
- o.querySelector('button').onclick=()=>o.remove();document.body.append(o)}
+ const tot=t.day_total??t.running,rows=[['Amount','KES '+fmt(t.amount)],['Phone',t.phone],t.receipt&&['M-Pesa receipt',t.receipt],t.ref&&['Reference',t.ref],t.by&&me.role==='owner'&&['Sent by',t.by],['Time',new Date(t.created_at).toLocaleString()],['Result',t.message],tot!=null&&['Total cash today','KES '+fmt(tot)]].filter(Boolean);
+ const o=modal(`<div class="ico ${m[2]}">${m[0]}</div><h2>${m[1]}</h2><div class="amt">KES ${fmt(t.amount)}</div><dl>${rows.map(r=>`<div><dt>${r[0]}</dt><dd>${esc(r[1])}</dd></div>`).join('')}</dl><button class="btn">Done</button>`);
+ o.querySelector('button').onclick=()=>o.remove()}
+function info(title,code,note,cb){const o=modal(`<h2>${title}</h2><div class="code">${esc(code)}</div><small>${note}</small><button class="btn" id="cp">Copy</button><button class="btn soft" id="dn">Done</button>`);
+ o.onclick=null;o.querySelector('#cp').onclick=()=>navigator.clipboard?.writeText(code).then(()=>toast('Copied','ok'));o.querySelector('#dn').onclick=()=>{o.remove();cb&&cb()}}
 function toast(m,k){const t=document.createElement('div');t.className='toast '+(k||'');t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),3800)}
 
-/* first run */
+/* install + intro */
 function install(){app.innerHTML=`<div class="intro splash"><div class="logo">M</div><h1>PayPrompt</h1><p>Send M-Pesa payment prompts to your customers, straight from your phone.</p>${deferred?'<button class="btn light" onclick="doInstall()">Install app</button>':'<div class="note light">To install, open your browser menu and choose <b>Add to Home screen</b>. On iPhone: Share, then Add to Home Screen.</div>'}<a class="lnk" style="color:#fff" onclick="localStorage.skipInstall=1;route()">Continue in browser</a></div>`}
 async function doInstall(){deferred.prompt();await deferred.userChoice;deferred=null}
 const SL=[
  ['<div class="ring"></div><div class="ring r2"></div><div class="phone"><div class="pop">Pay KES 500 to Mama Mboga?<span>Enter PIN</span></div></div>','Prompt a customer in seconds','Type their number and the amount. They get the M-Pesa PIN prompt on their phone.'],
- ['<div class="chips"><span>Till</span><span>Paybill</span></div>','Works with Till and Paybill','Set up your Daraja details once. Switch between Till and Paybill any time.'],
- ['<div class="tick">✓</div><div class="bars"><i></i><i></i><i></i></div>','Know the result at once','A clear card and a distinct sound for successful, cancelled and failed payments.'],
- ['<div class="days"><i></i><i></i><i></i></div><span class="plane">✈️</span>','Daily history, and Telegram','See each day\'s total at a glance. Send prompts from your Telegram bot too.']];
+ ['<div class="chips"><span>Till</span><span>Paybill</span></div>','Works with Till and Paybill','Set up your Daraja details once. Add your staff so everyone prompts into one business.'],
+ ['<div class="tick">✓</div><div class="bars"><i></i><i></i><i></i></div>','Know the result at once','A clear card, your total cash so far today, and a distinct sound for each outcome.'],
+ ['<div class="days"><i></i><i></i><i></i></div><span class="plane">✈️</span>','Daily records, and Telegram','See each day\'s total at a glance. Send prompts from your Telegram bot too.']];
 function intro(i=0){const s=SL[i],last=i===SL.length-1;app.innerHTML=`<div class="intro"><button class="skip" onclick="endIntro()">Skip</button><div class="art">${s[0]}</div><h1>${s[1]}</h1><p>${s[2]}</p><div class="dots">${SL.map((_,j)=>`<i class="${j===i?'on':''}"></i>`).join('')}</div><button class="btn light" onclick="${last?'endIntro()':`intro(${i+1})`}">${last?'Get started':'Next'}</button></div>`}
 function endIntro(){localStorage.intro=1;route()}
 
-/* auth */
-function auth(mode='login'){const reg=mode==='register';app.innerHTML=`<form class="auth" onsubmit="doAuth(event,'${mode}')"><div class="logo">M</div><h1>${reg?'Create your account':'Welcome back'}</h1>
+/* auth: sign in, register (owner or staff), forgot password */
+function auth(mode='login'){const reg=mode==='register',fg=mode==='forgot',pw=reg||fg;
+ app.innerHTML=`<form class="auth" onsubmit="doAuth(event,'${mode}')"><div class="logo">M</div><h1>${fg?'Reset your password':reg?'Create your account':'Welcome back'}</h1>
 <label>Email<input name="email" type="email" autocomplete="email" required></label>
-<label>Password<input name="password" type="password" minlength="8" autocomplete="${reg?'new-password':'current-password'}" required></label>
-${reg?'<label>Confirm password<input name="confirm" type="password" minlength="8" autocomplete="new-password" required></label>':''}
-<button class="btn" id="ab">${reg?'Create account':'Sign in'}</button>
-<small style="text-align:center">${reg?'Have an account?':'New here?'} <a onclick="auth('${reg?'login':'register'}')">${reg?'Sign in':'Create an account'}</a></small></form>`}
+${fg?'<label>Recovery code<input name="code" autocapitalize="characters" autocomplete="off" placeholder="XXXX-XXXX-XXXX-XXXX" required></label>':''}
+<label>${fg?'New password':'Password'}<input name="password" type="password" minlength="${pw?8:1}" autocomplete="${pw?'new-password':'current-password'}" required></label>
+${pw?'<label>Confirm password<input name="confirm" type="password" minlength="8" autocomplete="new-password" required></label>':''}
+${reg?'<label>Staff invite code <small>Only if you are joining a shop. Leave empty to start your own.</small><input name="invite" autocapitalize="characters" autocomplete="off"></label>':''}
+<button class="btn" id="ab">${fg?'Reset password':reg?'Create account':'Sign in'}</button>
+${mode==='login'?'<small style="text-align:center"><a onclick="auth(\'forgot\')">Forgot password?</a></small>':''}
+<small style="text-align:center">${pw?'Have an account?':'New here?'} <a onclick="auth('${pw?'login':'register'}')">${pw?'Sign in':'Create an account'}</a></small></form>`}
 async function doAuth(e,mode){e.preventDefault();const b=$('#ab');b.disabled=true;
- try{await api('/api/'+mode,{b:Object.fromEntries(new FormData(e.target))});me=await api('/api/me');cur=me.verified?'pay':'me';shell(cur)}catch(x){toast(x.message);b.disabled=false}}
+ try{const r=await api('/api/'+(mode==='forgot'?'reset':mode),{b:Object.fromEntries(new FormData(e.target))});
+  if(mode==='forgot')return info('Password changed',r.recovery,'This is your new recovery code. The old one no longer works. Keep it safe.',()=>auth('login'));
+  me=await api('/api/me');cur=pickTab();
+  if(r.recovery)return info('Save your recovery code',r.recovery,'If you forget your password, this code is the only way to reset it yourself. It is shown once.',()=>shell(cur));
+  shell(cur)}catch(x){toast(x.message);b.disabled=false}}
 
-/* shell */
-function shell(tab){cur=tab;app.innerHTML=`<header><b>PayPrompt</b><span class="pill ${me.verified?'':'warn'}">${me.verified?'Ready':'Setup needed'}</span></header><main id="v"></main><nav>${[['pay','Pay','📲'],['hist','History','🧾'],['me','Profile','👤']].map(t=>`<button class="${t[0]===tab?'on':''}" onclick="shell('${t[0]}')"><span>${t[2]}</span>${t[1]}</button>`).join('')}</nav>`;views[tab]()}
+/* app lock: PIN + fingerprint (stored on this device only) */
+const LK=()=>localStorage.lockpin;
+const sha=async s=>btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode('pp:'+s)))));
+const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
+const toB=b=>btoa(String.fromCharCode(...new Uint8Array(b))),fromB=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+function lockScreen(){locked=true;pin='';drawLock();if(localStorage.lockbio)bioUnlock()}
+function drawLock(){app.innerHTML=`<div class="intro lock"><div class="logo">M</div><h1>Enter your PIN</h1><div class="pd">${[0,1,2,3].map(i=>`<i class="${i<pin.length?'on':''}"></i>`).join('')}</div><div class="kp">${[1,2,3,4,5,6,7,8,9,localStorage.lockbio?'👆':'',0,'⌫'].map(k=>k===''?'<span></span>':`<button onclick="kp('${k}')">${k}</button>`).join('')}</div><a class="lnk" style="color:#fff" onclick="forgotPin()">Forgot PIN? Sign out</a></div>`}
+async function kp(k){if(k==='👆')return bioUnlock();if(k==='⌫')pin=pin.slice(0,-1);else if(pin.length<4)pin+=k;drawLock();
+ if(pin.length===4){if(await sha(pin)===LK())openApp();else{toast('Wrong PIN');pin='';setTimeout(drawLock,300)}}}
+function openApp(){locked=false;shell(cur||pickTab())}
+async function forgotPin(){localStorage.removeItem('lockpin');localStorage.removeItem('lockbio');await logout()}
+async function bioUnlock(){try{await navigator.credentials.get({publicKey:{challenge:rnd(32),allowCredentials:[{type:'public-key',id:fromB(localStorage.lockbio)}],userVerification:'required',timeout:60000}});openApp()}catch{toast('Fingerprint not recognised. Use your PIN.')}}
+async function bioOn(){try{const c=await navigator.credentials.create({publicKey:{challenge:rnd(32),rp:{name:'PayPrompt'},user:{id:rnd(16),name:me.email,displayName:me.email},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required'},timeout:60000}});localStorage.lockbio=toB(c.rawId);toast('Fingerprint turned on','ok');shell('me')}catch{toast('Could not set up a fingerprint on this device')}}
+function bioOff(){localStorage.removeItem('lockbio');shell('me')}
+async function pinOn(){const a=$('#p1').value,b=$('#p2').value;if(!/^\d{4}$/.test(a))return toast('Use exactly 4 digits.');if(a!==b)return toast('The PINs do not match.');localStorage.lockpin=await sha(a);toast('PIN lock is on','ok');shell('me')}
+async function pinOff(){const p=prompt('Enter your current PIN to turn off the lock');if(p&&await sha(p)===LK()){localStorage.removeItem('lockpin');localStorage.removeItem('lockbio');shell('me')}else if(p!==null)toast('Wrong PIN')}
+function lockCard(){const on=!!LK(),bio=!!localStorage.lockbio;
+ return `<div class="card"><h2>App lock</h2>${on?`<small>PIN lock is on. The app locks after 30 seconds away.</small>${window.PublicKeyCredential?`<button class="btn soft" onclick="${bio?'bioOff()':'bioOn()'}">${bio?'Turn off fingerprint':'Use fingerprint'}</button>`:''}<button class="btn ghost" onclick="pinOff()">Turn off lock</button>`:'<small>Ask for a PIN when the app opens. You can add your fingerprint after.</small><input id="p1" type="password" inputmode="numeric" maxlength="4" placeholder="New 4-digit PIN"><input id="p2" type="password" inputmode="numeric" maxlength="4" placeholder="Confirm PIN"><button class="btn" onclick="pinOn()">Turn on PIN lock</button>'}</div>`}
+
+/* shell + views */
+function shell(tab){cur=tab;app.innerHTML=`<header><b>PayPrompt</b><span class="pill ${me.verified?'':'warn'}">${me.verified?(me.role==='staff'?'Staff':'Ready'):'Setup needed'}</span></header><main id="v"></main><nav>${[['pay','Pay','📲'],['hist','History','🧾'],['me','Profile','👤']].map(t=>`<button class="${t[0]===tab?'on':''}" onclick="shell('${t[0]}')"><span>${t[2]}</span>${t[1]}</button>`).join('')}</nav>`;views[tab]()}
 const views={};
-views.pay=()=>{$('#v').innerHTML=`${me.verified?'':'<div class="note">Add and verify your Daraja details to start sending prompts. <a onclick="shell(\'me\')">Open Profile</a></div>'}
+views.pay=()=>{$('#v').innerHTML=`${me.verified?'':me.role==='staff'?'<div class="note">The owner has not finished setting up payments yet.</div>':'<div class="note">Add and verify your Daraja details to start sending prompts. <a onclick="shell(\'me\')">Open Profile</a></div>'}
+<div class="today"><div><small>${me.role==='staff'?'Your total today':'Total cash today'}</small><b id="td">KES ${fmt(me.today.total)}</b></div><small id="tn">${me.today.n} payment${me.today.n===1?'':'s'}</small></div>
 <form class="card" onsubmit="send(event)"><h2>Send a prompt</h2>
 <label>Customer phone<input id="ph" inputmode="tel" placeholder="0712 345 678" required></label>
 <label>Amount (KES)<input id="am" type="number" inputmode="numeric" min="1" placeholder="500" required></label>
@@ -134,20 +175,21 @@ async function send(e){e.preventDefault();unlock();const b=$('#go');b.disabled=t
  try{const{id}=await api('/api/pay',{b:{phone:$('#ph').value,amount:$('#am').value,ref:$('#rf')?.value}});
   $('#live').innerHTML='<div class="card wait"><div class="spin"></div><div><b>Prompt sent</b><small>Waiting for the customer to enter their PIN</small></div></div>';poll(id)}
  catch(x){toast(x.message)}b.disabled=false}
-async function poll(id,n=0){if(!$('#live'))return;try{const t=await api('/api/status/'+id);if(t.status!=='pending'){$('#live').innerHTML='';$('#ph').value=$('#am').value='';return result(t)}}catch{}
+async function poll(id,n=0){if(!$('#live'))return;try{const t=await api('/api/status/'+id);if(t.status!=='pending'){$('#live').innerHTML='';$('#ph').value=$('#am').value='';result(t);
+  me=await api('/api/me');if($('#td')){$('#td').textContent='KES '+fmt(me.today.total);$('#tn').textContent=me.today.n+' payment'+(me.today.n===1?'':'s')}return}}catch{}
  n<60?setTimeout(()=>poll(id,n+1),3000):$('#live').innerHTML='<div class="note">No response yet. Check the History tab in a moment.</div>'}
 const nairobiDay=ms=>new Date(ms+3*36e5).toISOString().slice(0,10);
 const dayLabel=d=>d===nairobiDay(Date.now())?'Today':d===nairobiDay(Date.now()-864e5)?'Yesterday':new Date(d+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short',year:'numeric'});
 let H={};
-views.hist=async()=>{$('#v').innerHTML='<div class="note">Loading history…</div>';
- try{const{days}=await api('/api/history');H={};
- $('#v').innerHTML=days.length?days.map(d=>`<section class="day"><div class="dh"><div><b>${dayLabel(d.date)}</b><small>${d.count} prompt${d.count>1?'s':''}</small></div><div class="tot">KES ${fmt(d.total)}<small>received</small></div></div>${d.tx.map(t=>{H[t.id]=t;return`<div class="row" tabindex="0" onclick="result(H['${t.id}'],1)"><span class="dot ${t.status}"></span><div><b>${esc(t.phone)}</b><small>${t.status}, ${new Date(t.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</small></div><b>KES ${fmt(t.amount)}</b></div>`}).join('')}</section>`).join(''):'<div class="note">No prompts yet. Send your first one from the Pay tab.</div>'}
- catch(x){$('#v').innerHTML='<div class="note">Could not load history.</div>'}};
+views.hist=async()=>{$('#v').innerHTML='<div class="note">Loading records…</div>';
+ try{const{days}=await api('/api/history');H={};const own=me.role==='owner';
+ $('#v').innerHTML=days.length?days.map(d=>`<section class="day"><div class="dh"><div><b>${dayLabel(d.date)}</b><small>${d.ok} paid, ${d.cancelled} cancelled, ${d.failed} failed</small></div><div class="tot">KES ${fmt(d.total)}<small>cash received</small></div></div>${d.tx.map(t=>{H[t.id]=t;return`<div class="row" tabindex="0" onclick="result(H['${t.id}'],1)"><span class="dot ${t.status}"></span><div><b>${esc(t.phone)}</b><small>${t.status}, ${new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}${own&&t.by?', '+esc(t.by.split('@')[0]):''}</small></div><div class="amr"><b>KES ${fmt(t.amount)}</b><small>Total KES ${fmt(t.running)}</small></div></div>`}).join('')}</section>`).join(''):'<div class="note">No records yet. Send your first prompt from the Pay tab.</div>'}
+ catch(x){$('#v').innerHTML='<div class="note">Could not load records.</div>'}};
 const seg=(n,o,v)=>o.map(a=>`<label><input type="radio" name="${n}" value="${a[0]}" ${a[0]===v?'checked':''} onchange="lab()"><span>${a[1]}</span></label>`).join('');
 function lab(){const t=document.querySelector('[name=type]:checked').value;$('#l1').textContent=t==='till'?'Store number (Head Office)':'Paybill number';$('#l2').textContent=t==='till'?'Till number':'Account number'}
-views.me=()=>{const s=me.settings||{env:'sandbox',type:'paybill'},ph=s.saved?'•••••• saved. Leave blank to keep':'',rq=s.saved?'':'required';
- $('#v').innerHTML=`<div class="card"><small>Signed in as</small><b>${esc(me.email)}</b></div>
-<form class="card" onsubmit="save(event)"><h2>Daraja details</h2>
+views.me=()=>{const own=me.role==='owner',s=me.settings||{env:'sandbox',type:'paybill'},ph=s.saved?'•••••• saved. Leave blank to keep':'',rq=s.saved?'':'required';
+ $('#v').innerHTML=`<div class="card"><small>Signed in as ${own?'owner':'staff'}</small><b>${esc(me.email)}</b></div>
+${own?`<form class="card" onsubmit="save(event)"><h2>Daraja details</h2>
 <div class="seg">${seg('env',[['sandbox','Sandbox (testing)'],['live','Live']],s.env)}</div>
 <div class="seg">${seg('type',[['paybill','Paybill'],['till','Till']],s.type)}</div>
 <label><span id="l1"></span><input name="shortcode" inputmode="numeric" value="${esc(s.shortcode)}" required></label>
@@ -157,17 +199,22 @@ views.me=()=>{const s=me.settings||{env:'sandbox',type:'paybill'},ph=s.saved?'�
 <label>Passkey<input name="passkey" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
 <button class="btn" id="sv">Save and verify</button>
 <small>${me.verified?'Verified. You can send prompts.':'Prompts unlock once your details are verified.'}</small></form>
-<div class="card"><h2>Telegram</h2>${me.telegram?'<small>Connected. Send your bot a message like <b>0712345678 500</b> to prompt a customer, and it replies with the result.</small><button class="btn ghost" onclick="tgOff()">Disconnect</button>':'<small>Connect your Telegram to send prompts from the bot and get results there.</small><button class="btn" onclick="tgOn()">Connect Telegram</button>'}</div>
-<button class="btn ghost" onclick="logout()">Sign out</button>`;lab()};
+<div class="card"><h2>Staff</h2><div id="stf"><small>Loading…</small></div></div>`:'<div class="card"><small>Payment details are managed by the business owner. Everything you send goes into the shared business till.</small></div>'}
+${lockCard()}
+<div class="card"><h2>Telegram</h2>${me.telegram?'<small>Connected. Send your bot a message like <b>0712345678 500</b> to prompt a customer, and it replies with the result and your total today.</small><button class="btn ghost" onclick="tgOff()">Disconnect</button>':'<small>Connect your Telegram to send prompts from the bot and get results there.</small><button class="btn" onclick="tgOn()">Connect Telegram</button>'}</div>
+<button class="btn ghost" onclick="logout()">Sign out</button>`;if(own){lab();loadStaff()}};
+async function loadStaff(){try{const{invite,staff}=await api('/api/staff');$('#stf').innerHTML=`<small>Share this code with a staff member. They enter it when creating their account, and their prompts go into your business.</small><div class="code">${invite?esc(invite):'No code yet'}</div><button class="btn soft" onclick="newInvite()">${invite?'Make a new code':'Create invite code'}</button>${staff.length?staff.map(s=>`<div class="row" style="cursor:default"><div><b>${esc(s.email)}</b></div><a onclick="stReset(${s.id})">Reset password</a><a style="color:var(--red)" onclick="stDel(${s.id})">Remove</a></div>`).join(''):'<small>No staff yet.</small>'}`}catch{}}
+async function newInvite(){await api('/api/staff/invite',{b:{}});loadStaff()}
+async function stReset(id){const r=await api('/api/staff/reset',{b:{id}});info('Temporary password',r.temp,'Give this to your staff member. They sign in with it, and their old sessions are signed out.')}
+async function stDel(id){if(!confirm('Remove this staff member? Their past records stay in your history.'))return;await api('/api/staff/remove',{b:{id}});loadStaff()}
 async function save(e){e.preventDefault();const b=$('#sv');b.disabled=true;b.textContent='Verifying…';
  try{await api('/api/settings',{m:'PUT',b:Object.fromEntries(new FormData(e.target))});toast('Verified. You can start sending prompts.','ok')}catch(x){toast(x.message)}
  me=await api('/api/me');shell('me')}
 async function tgOn(){try{const{url}=await api('/api/telegram/link',{b:{}});location.href=url}catch(x){toast(x.message)}}
 async function tgOff(){await api('/api/telegram/unlink',{b:{}});me=await api('/api/me');shell('me')}
-async function logout(){await api('/api/logout',{b:{}});me=null;auth()}
+async function logout(){await api('/api/logout',{b:{}});me=null;locked=false;auth()}
 
-/* routing */
 function route(){if(!me&&!standalone&&!localStorage.skipInstall&&!localStorage.intro)return install();
- if(!localStorage.intro&&!me)return intro();if(!me)return auth('login');shell(me.verified?'pay':'me')}
+ if(!localStorage.intro&&!me)return intro();if(!me)return auth('login');if(LK()&&!locked&&!app.querySelector('header'))return lockScreen();shell(pickTab())}
 (async()=>{try{me=await api('/api/me')}catch{}route()})();
 </script></body></html>
