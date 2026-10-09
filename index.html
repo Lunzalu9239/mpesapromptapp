@@ -82,6 +82,7 @@ dl div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-
 .lock{gap:18px}.pd{display:flex;gap:14px}.pd i{width:16px;height:16px;border-radius:50%;border:2px solid #fff}.pd i.on{background:#fff}
 .kp{display:grid;grid-template-columns:repeat(3,76px);gap:14px}.kp button{height:76px;border-radius:50%;border:0;background:#ffffff26;color:#fff;font-size:1.6rem;font-weight:700}.kp button:active{background:#ffffff55}
 .sheet.g{text-align:left;max-height:86vh;overflow:auto}.gd p{margin:0 0 12px;font-size:.92rem}.gd small{margin-bottom:10px}
+label.sw{flex-direction:row;align-items:center;justify-content:space-between;gap:12px}.sw input{width:auto;transform:scale(1.4);accent-color:var(--g)}
 </style></head>
 <body><div id="app"></div>
 <script>
@@ -101,15 +102,15 @@ const pickTab=()=>me.verified||me.role==='staff'?'pay':'me';
 
 /* sound + cards */
 let ac;const unlock=()=>{ac=ac||new(window.AudioContext||window.webkitAudioContext)();ac.resume()};
-function tone(k){if(!ac)return;const n={success:[[523,0],[659,.14],[784,.28],[1047,.42]],cancelled:[[440,0],[330,.22]],failed:[[220,0],[196,.2],[150,.4]]}[k];
- n.forEach(([f,t])=>{const o=ac.createOscillator(),g=ac.createGain(),a=ac.currentTime+t;o.type=k==='failed'?'sawtooth':k==='cancelled'?'triangle':'sine';o.frequency.value=f;g.gain.setValueAtTime(.0001,a);g.gain.exponentialRampToValueAtTime(.25,a+.03);g.gain.exponentialRampToValueAtTime(.0001,a+.24);o.connect(g).connect(ac.destination);o.start(a);o.stop(a+.26)});
- navigator.vibrate&&navigator.vibrate({success:[90],cancelled:[60,60,60],failed:[350]}[k])}
+function tone(k){if(localStorage.mute||!ac)return;const n={success:[[523,0],[659,.16]],cancelled:[[440,0],[392,.2]],failed:[[262,0],[220,.22]]}[k];
+ n.forEach(([f,t])=>{const o=ac.createOscillator(),g=ac.createGain(),a=ac.currentTime+t;o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(.0001,a);g.gain.exponentialRampToValueAtTime(.12,a+.03);g.gain.exponentialRampToValueAtTime(.0001,a+.4);o.connect(g).connect(ac.destination);o.start(a);o.stop(a+.42)});
+ navigator.vibrate&&navigator.vibrate({success:[50],cancelled:[40,60,40],failed:[160]}[k])}
 function modal(h){const o=document.createElement('div');o.className='ov';o.onclick=e=>e.target===o&&o.remove();o.innerHTML=`<div class="sheet" role="dialog">${h}</div>`;document.body.append(o);return o}
 function result(t,quiet){if(!quiet)tone(t.status);
  const m={success:['✓','Payment successful','ok'],cancelled:['✕','Prompt cancelled','warn'],failed:['!','Payment failed','bad']}[t.status]||['…','Waiting for customer','warn'];
  const tot=t.day_total??t.running,rows=[['Amount','KES '+fmt(t.amount)],['Phone',t.phone],t.receipt&&['M-Pesa receipt',t.receipt],t.ref&&['Reference',t.ref],t.by&&me.role==='owner'&&['Sent by',t.by],['Time',new Date(t.created_at).toLocaleString()],['Result',t.message],tot!=null&&['Total cash today','KES '+fmt(tot)]].filter(Boolean);
- const o=modal(`<div class="ico ${m[2]}">${m[0]}</div><h2>${m[1]}</h2><div class="amt">KES ${fmt(t.amount)}</div><dl>${rows.map(r=>`<div><dt>${r[0]}</dt><dd>${esc(r[1])}</dd></div>`).join('')}</dl><button class="btn">Done</button>`);
- o.querySelector('button').onclick=()=>o.remove()}
+ const bad=t.status==='cancelled'||t.status==='failed';const o=modal(`<div class="ico ${m[2]}">${m[0]}</div><h2>${m[1]}</h2><div class="amt">KES ${fmt(t.amount)}</div><dl>${rows.map(r=>`<div><dt>${r[0]}</dt><dd>${esc(r[1])}</dd></div>`).join('')}</dl>${bad?'<button class="btn" id="rs">Resend prompt</button><button class="btn soft" id="dn">Close</button>':'<button class="btn" id="dn">Done</button>'}`);
+ o.querySelector('#dn').onclick=()=>o.remove();const rs=o.querySelector('#rs');if(rs)rs.onclick=()=>{o.remove();resend(t)}}
 function info(title,code,note,cb){const o=modal(`<h2>${title}</h2><div class="code">${esc(code)}</div><small>${note}</small><button class="btn" id="cp">Copy</button><button class="btn soft" id="dn">Done</button>`);
  o.onclick=null;o.querySelector('#cp').onclick=()=>navigator.clipboard?.writeText(code).then(()=>toast('Copied','ok'));o.querySelector('#dn').onclick=()=>{o.remove();cb&&cb()}}
 function toast(m,k){const t=document.createElement('div');t.className='toast '+(k||'');t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),3800)}
@@ -160,16 +161,18 @@ function bioOff(){localStorage.removeItem('lockbio');shell('me')}
 async function pinOn(){const a=$('#p1').value,b=$('#p2').value;if(!/^\d{4}$/.test(a))return toast('Use exactly 4 digits.');if(a!==b)return toast('The PINs do not match.');localStorage.lockpin=await sha(a);toast('PIN lock is on','ok');shell('me')}
 async function pinOff(){const p=prompt('Enter your current PIN to turn off the lock');if(p&&await sha(p)===LK()){localStorage.removeItem('lockpin');localStorage.removeItem('lockbio');shell('me')}else if(p!==null)toast('Wrong PIN')}
 
-function guide(){const L=(u,t)=>`<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
- const o=modal(`<h2>Get your Daraja details</h2><div class="gd">
-<p><b>1. Create a Daraja account</b><br>Sign up with your email at ${L('https://daraja.safaricom.co.ke','the Daraja portal')}.</p>
-<p><b>2. Create an app</b><br>Open ${L('https://daraja.safaricom.co.ke/dashboard/myapps','My Apps')}, create an app and tick M-Pesa Express. Your <b>Consumer key</b> and <b>Consumer secret</b> are shown on the app page. Copy each one into the matching box here.</p>
-<p><b>3. Test first (Sandbox)</b><br>The test <b>Passkey</b> and test shortcode are on the ${L('https://developer.safaricom.co.ke/apis/MpesaExpressSimulate','M-Pesa Express page')}, in the test data section. Choose Sandbox here, Paybill, and paste them in. No real money moves.</p>
-<p><b>4. Go Live for real payments</b><br>On the portal, open your app and tap <b>Go Live</b>. You need a live Paybill or Till with a Business Admin or Manager user. Once approved, Safaricom gives you live keys (different from the test ones) and emails your live <b>Passkey</b>.</p>
-<p><b>5. Which number goes where</b><br><b>Paybill:</b> your Paybill number, then your Account number.<br><b>Till:</b> your Store (Head Office) number, the one used to go live, then your Till number.</p>
-<p><b>6. Finish</b><br>Choose Live, paste the live details, and tap Save and verify. The app tests the keys with Safaricom straight away.</p>
-<small>Safaricom sometimes renames pages. If a link looks different, search the portal for "M-Pesa Express" or ask Safaricom business support.</small></div><button class="btn">Got it</button>`);
+function guide(){
+ const o=modal(`<h2>Find your business details</h2><div class="gd">
+<p><b>1. Organization name</b><br>Enter the official name of the business or owner as registered on the till. This is the exact business name shown on the Lipa na M-PESA sticker or on the payment confirmation SMS.</p>
+<p><b>2. Organization shortcode (Store number)</b><br>Daraja expects the Store Number or Head Office Number, not the Till Number your customers pay into.<br><br><b>With USSD:</b> on the owner's phone linked to the till, dial <b>*234#</b>, choose <b>M-PESA Business Till</b>, and the prompt asks for or shows the Head Office / Store Number.<br><br><b>With the M-PESA for Business app:</b> the Store Number is shown at the top, under the account or store details.</p>
+<p><b>3. M-PESA username / Operator ID</b><br>Every till has at least one Primary Operator ID, created when the till was activated. It is usually a short code or letters, for example BK, 1, or initials.<br><br><b>With USSD:</b> dial <b>*234#</b> from the nominated phone, choose <b>M-PESA Business Till</b>, enter the Store Number, then choose <b>Account Services</b>. There the owner can view operator details or manage assistant operators.<br><br><b>With the web portal (if enrolled):</b> on the M-PESA Organization Portal, the operator ID is the exact username used to sign in.</p>
+<small>Menus can look slightly different between phones and Safaricom updates.</small></div><button class="btn">Got it</button>`);
  o.firstChild.classList.add('g');o.querySelector('button').onclick=()=>o.remove()}
+async function resend(t){unlock();try{const{id}=await api('/api/pay',{b:{phone:t.phone,amount:t.amount,ref:t.ref}});if(cur!=='pay')shell('pay');
+ $('#live').innerHTML='<div class="card wait"><div class="spin"></div><div><b>Prompt sent again</b><small>Waiting for the customer to enter their PIN</small></div></div>';poll(id)}catch(x){toast(x.message)}}
+function soundCard(){const on=!localStorage.mute;return `<div class="card"><h2>Notifications</h2><label class="sw"><span>Sound and vibration<small>Soft tones for successful, cancelled and failed payments</small></span><input type="checkbox" ${on?'checked':''} onchange="setSound(this.checked)"></label><button class="btn soft" onclick="preview()">Play sample tones</button></div>`}
+function setSound(on){on?localStorage.removeItem('mute'):localStorage.mute=1;unlock();if(on)tone('success')}
+function preview(){if(localStorage.mute)return toast('Sound is turned off');unlock();tone('success');setTimeout(()=>tone('cancelled'),900);setTimeout(()=>tone('failed'),1800)}
 function lockCard(){const on=!!LK(),bio=!!localStorage.lockbio;
  return `<div class="card"><h2>App lock</h2>${on?`<small>PIN lock is on. The app locks after 30 seconds away.</small>${window.PublicKeyCredential?`<button class="btn soft" onclick="${bio?'bioOff()':'bioOn()'}">${bio?'Turn off fingerprint':'Use fingerprint'}</button>`:''}<button class="btn ghost" onclick="pinOff()">Turn off lock</button>`:'<small>Ask for a PIN when the app opens. You can add your fingerprint after.</small><input id="p1" type="password" inputmode="numeric" maxlength="4" placeholder="New 4-digit PIN"><input id="p2" type="password" inputmode="numeric" maxlength="4" placeholder="Confirm PIN"><button class="btn" onclick="pinOn()">Turn on PIN lock</button>'}</div>`}
 
@@ -201,7 +204,7 @@ const seg=(n,o,v)=>o.map(a=>`<label><input type="radio" name="${n}" value="${a[0
 function lab(){const t=document.querySelector('[name=type]:checked').value;$('#l1').textContent=t==='till'?'Store number (Head Office)':'Paybill number';$('#l2').textContent=t==='till'?'Till number':'Account number'}
 views.me=()=>{const own=me.role==='owner',s=me.settings||{env:'sandbox',type:'paybill'},ph=s.saved?'•••••• saved. Leave blank to keep':'',rq=s.saved?'':'required';
  $('#v').innerHTML=`<div class="card"><small>Signed in as ${own?'owner':'staff'}</small><b>${esc(me.email)}</b></div>
-${own?`<form class="card" onsubmit="save(event)"><h2>Daraja details</h2><button type="button" class="btn soft" onclick="guide()">How do I get these details?</button>
+${own?`<form class="card" onsubmit="save(event)"><h2>Daraja details</h2><button type="button" class="btn soft" onclick="guide()">Where do I find my business details?</button>
 <div class="seg">${seg('env',[['sandbox','Sandbox (testing)'],['live','Live']],s.env)}</div>
 <div class="seg">${seg('type',[['paybill','Paybill'],['till','Till']],s.type)}</div>
 <label><span id="l1"></span><input name="shortcode" inputmode="numeric" value="${esc(s.shortcode)}" required></label>
@@ -212,7 +215,7 @@ ${own?`<form class="card" onsubmit="save(event)"><h2>Daraja details</h2><button 
 <button class="btn" id="sv">Save and verify</button>
 <small>${me.verified?'Verified. You can send prompts.':'Prompts unlock once your details are verified.'}</small></form>
 <div class="card"><h2>Staff</h2><div id="stf"><small>Loading…</small></div></div>`:'<div class="card"><small>Payment details are managed by the business owner. Everything you send goes into the shared business till.</small></div>'}
-${lockCard()}
+${soundCard()}${lockCard()}
 <div class="card"><h2>Telegram</h2>${me.telegram?'<small>Connected. Send your bot a message like <b>0712345678 500</b> to prompt a customer, and it replies with the result and your total today.</small><button class="btn ghost" onclick="tgOff()">Disconnect</button>':'<small>Connect your Telegram to send prompts from the bot and get results there.</small><button class="btn" onclick="tgOn()">Connect Telegram</button>'}</div>
 <button class="btn ghost" onclick="logout()">Sign out</button>`;if(own){lab();loadStaff()}};
 async function loadStaff(){try{const{invite,staff}=await api('/api/staff');$('#stf').innerHTML=`<small>Share this code with a staff member. They enter it when creating their account, and their prompts go into your business.</small><div class="code">${invite?esc(invite):'No code yet'}</div><button class="btn soft" onclick="newInvite()">${invite?'Make a new code':'Create invite code'}</button>${staff.length?staff.map(s=>`<div class="row" style="cursor:default"><div><b>${esc(s.email)}</b></div><a onclick="stReset(${s.id})">Reset password</a><a style="color:var(--red)" onclick="stDel(${s.id})">Remove</a></div>`).join(''):'<small>No staff yet.</small>'}`}catch{}}
