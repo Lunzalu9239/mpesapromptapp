@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#00a651">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<title>PayPrompt</title>
+<style>
+:root{--g:#00a651;--gd:#006f37;--gl:#e4f6ea;--bg:#f3f9f5;--ink:#0e2a1a;--mute:#5c7566;--amber:#d98e00;--red:#d63a2f;--r:18px}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);padding-top:env(safe-area-inset-top)}
+#app{min-height:100%;display:flex;flex-direction:column}
+button,input{font:inherit}
+small{display:block;color:var(--mute);font-size:.8rem}
+a,.lnk{color:var(--gd);font-weight:600;cursor:pointer}
+.btn{border:0;border-radius:14px;background:var(--g);color:#fff;font-weight:700;padding:15px 22px;width:100%;cursor:pointer;box-shadow:0 6px 16px #00a65140}
+.btn:disabled{opacity:.6}.btn.light{background:#fff;color:var(--gd);box-shadow:none}.btn.ghost{background:transparent;color:var(--red);box-shadow:none;border:1.5px solid #f1c4c0}
+:focus-visible{outline:3px solid #0a8a47;outline-offset:2px}
+/* intro + splash */
+.intro{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;padding:32px 28px calc(28px + env(safe-area-inset-bottom));color:#fff;background:radial-gradient(120% 80% at 50% 0%,#12c26a,#00a651 45%,#006f37)}
+.intro h1{font-size:1.9rem;line-height:1.15;max-width:15ch}.intro p{opacity:.92;max-width:30ch}
+.intro .btn{max-width:320px;margin-top:10px}.skip{position:absolute;top:calc(14px + env(safe-area-inset-top));right:18px;background:none;border:0;color:#fff;opacity:.85;font-weight:600}
+.art{height:230px;width:230px;position:relative;display:grid;place-items:center}
+.dots{display:flex;gap:7px}.dots i{width:8px;height:8px;border-radius:9px;background:#ffffff66;transition:.3s}.dots i.on{width:24px;background:#fff}
+.logo{width:92px;height:92px;border-radius:26px;background:#fff;color:var(--g);font-size:3.2rem;font-weight:900;display:grid;place-items:center;animation:pop .6s both}
+.phone{width:128px;height:216px;border-radius:26px;background:#07381f;border:4px solid #fff;position:relative;overflow:hidden;animation:float 3.2s ease-in-out infinite}
+.phone .pop{position:absolute;left:8px;right:8px;top:70px;background:#fff;color:var(--ink);border-radius:14px;padding:10px;font-size:.78rem;font-weight:700;animation:slide 3.2s ease-in-out infinite}
+.phone .pop span{display:block;margin-top:6px;background:var(--g);color:#fff;border-radius:8px;padding:4px}
+.ring{position:absolute;inset:20px;border-radius:50%;border:3px solid #fff;animation:ring 2.4s ease-out infinite;opacity:0}.ring.r2{animation-delay:1.2s}
+.chips{display:flex;flex-direction:column;gap:16px}.chips span{background:#fff;color:var(--gd);font-weight:800;font-size:1.4rem;padding:16px 38px;border-radius:20px;animation:float 3s ease-in-out infinite}.chips span:last-child{animation-delay:-1.5s;margin-left:34px}
+.tick{width:120px;height:120px;border-radius:50%;background:#fff;color:var(--g);font-size:4rem;font-weight:900;display:grid;place-items:center;animation:pop .7s both}
+.bars{position:absolute;bottom:6px;display:flex;gap:6px;align-items:flex-end}.bars i{width:10px;border-radius:5px;background:#fff;animation:eq 1s ease-in-out infinite}.bars i:nth-child(2){animation-delay:.2s}.bars i:nth-child(3){animation-delay:.4s}
+.days{display:flex;flex-direction:column;gap:10px;width:200px}.days i{height:46px;border-radius:14px;background:#ffffffd9;animation:slide2 .7s both}.days i:nth-child(2){animation-delay:.15s;opacity:.8}.days i:nth-child(3){animation-delay:.3s;opacity:.6}
+.plane{position:absolute;right:-6px;top:0;font-size:2.4rem;animation:float 2.6s ease-in-out infinite}
+@keyframes float{50%{transform:translateY(-12px)}}@keyframes pop{0%{transform:scale(.3);opacity:0}70%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+@keyframes ring{0%{transform:scale(.6);opacity:.8}100%{transform:scale(1.5);opacity:0}}@keyframes slide{0%,20%{transform:translateY(-120px)}40%,80%{transform:none}100%{transform:translateY(-120px)}}
+@keyframes eq{0%,100%{height:8px}50%{height:34px}}@keyframes slide2{from{transform:translateX(60px);opacity:0}}
+/* auth */
+.auth{flex:1;padding:28px 22px;display:flex;flex-direction:column;justify-content:center;max-width:440px;margin:auto;width:100%;gap:16px}
+.auth .logo{width:64px;height:64px;font-size:2.2rem;border-radius:18px;background:var(--g);color:#fff}
+.auth h1{font-size:1.7rem}
+/* app */
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:var(--g);color:#fff;position:sticky;top:0;z-index:5}
+header b{font-size:1.2rem}
+.pill{font-size:.75rem;font-weight:700;padding:4px 11px;border-radius:20px;background:#fff;color:var(--gd)}.pill.warn{background:#fff3d6;color:#8a5a00}
+main{flex:1;padding:16px 16px 100px;max-width:560px;width:100%;margin:auto;display:flex;flex-direction:column;gap:14px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid #dcebe1;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav button{flex:1;border:0;background:none;padding:10px 0 9px;color:var(--mute);font-size:.78rem;font-weight:600;display:grid;gap:2px;cursor:pointer}
+nav button span{font-size:1.3rem}nav button.on{color:var(--g)}
+.card{background:#fff;border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:13px;box-shadow:0 2px 14px #0a3d2412}
+.card h2{font-size:1.1rem}
+label{display:flex;flex-direction:column;gap:5px;font-weight:600;font-size:.88rem}
+input{border:1.5px solid #cfe3d6;border-radius:12px;padding:13px 14px;background:#fbfefc;color:var(--ink);width:100%}
+input:focus{border-color:var(--g);outline:0;box-shadow:0 0 0 3px #00a65126}
+.seg{display:flex;background:var(--gl);border-radius:13px;padding:4px;gap:4px}.seg label{flex:1;position:relative}.seg input{position:absolute;opacity:0}
+.seg span{display:block;text-align:center;padding:10px 6px;border-radius:10px;font-weight:700;font-size:.85rem;color:var(--gd);cursor:pointer}.seg input:checked+span{background:var(--g);color:#fff}.seg input:focus-visible+span{outline:3px solid #0a8a47}
+.note{background:#fff3d6;color:#6d4700;padding:13px 15px;border-radius:14px;font-size:.9rem}.note.light{background:#ffffff26;color:#fff}
+.wait{flex-direction:row;align-items:center}.spin{width:30px;height:30px;border:4px solid var(--gl);border-top-color:var(--g);border-radius:50%;animation:sp 1s linear infinite;flex:none}@keyframes sp{to{transform:rotate(1turn)}}
+.day{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:0 2px 14px #0a3d2412}
+.dh{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--gl)}.tot{text-align:right;font-weight:800;color:var(--gd);font-size:1.1rem}
+.row{display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:1px solid #edf5f0;cursor:pointer}.row>div{flex:1}.row>b{font-size:.95rem}
+.dot{width:11px;height:11px;border-radius:50%;flex:none}.dot.success{background:var(--g)}.dot.cancelled{background:var(--amber)}.dot.failed{background:var(--red)}.dot.pending{background:#9db}
+/* result modal */
+.ov{position:fixed;inset:0;background:#06140ccc;display:grid;place-items:center;padding:20px;z-index:20;animation:fade .2s}
+.sheet{background:#fff;border-radius:26px;padding:26px 22px;width:100%;max-width:380px;text-align:center;display:flex;flex-direction:column;gap:12px;animation:pop .45s both}
+.ico{width:76px;height:76px;border-radius:50%;margin:0 auto;display:grid;place-items:center;font-size:2.4rem;font-weight:900;color:#fff}
+.ico.ok{background:var(--g)}.ico.warn{background:var(--amber)}.ico.bad{background:var(--red);animation:shake .5s}
+.amt{font-size:1.9rem;font-weight:900}dl{text-align:left;background:var(--bg);border-radius:14px;padding:6px 14px}
+dl div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #e1eee6;font-size:.88rem}dl div:last-child{border:0}dt{color:var(--mute)}dd{font-weight:700;text-align:right;word-break:break-word}
+.toast{position:fixed;top:calc(12px + env(safe-area-inset-top));left:14px;right:14px;max-width:460px;margin:auto;background:#3a1411;color:#fff;padding:13px 16px;border-radius:14px;z-index:30;animation:fade .2s;font-weight:600}.toast.ok{background:var(--gd)}
+@keyframes fade{from{opacity:0}}@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head>
+<body><div id="app"></div>
+<script>
+const $=s=>document.querySelector(s),app=$('#app');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+const fmt=n=>Number(n).toLocaleString('en-KE');
+const api=async(p,o={})=>{const r=await fetch(p,{method:o.m||(o.b?'POST':'GET'),headers:{'content-type':'application/json'},body:o.b&&JSON.stringify(o.b)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(d.error||'Something went wrong'),{status:r.status});return d};
+const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+let me=null,deferred=null,cur='pay';
+if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;if($('.splash'))install()});
+addEventListener('appinstalled',()=>{app.innerHTML=`<div class="intro splash"><div class="logo">✓</div><h1>App installed</h1><p>Open PayPrompt from your home screen to get started.</p></div>`});
+addEventListener('visibilitychange',async()=>{if(!document.hidden&&me&&cur==='me'){me=await api('/api/me');shell('me')}});
+
+/* sound + notifications */
+let ac;const unlock=()=>{ac=ac||new(window.AudioContext||window.webkitAudioContext)();ac.resume()};
+function tone(k){if(!ac)return;const n={success:[[523,0],[659,.14],[784,.28],[1047,.42]],cancelled:[[440,0],[330,.22]],failed:[[220,0],[196,.2],[150,.4]]}[k];
+ n.forEach(([f,t])=>{const o=ac.createOscillator(),g=ac.createGain(),a=ac.currentTime+t;o.type=k==='failed'?'sawtooth':k==='cancelled'?'triangle':'sine';o.frequency.value=f;g.gain.setValueAtTime(.0001,a);g.gain.exponentialRampToValueAtTime(.25,a+.03);g.gain.exponentialRampToValueAtTime(.0001,a+.24);o.connect(g).connect(ac.destination);o.start(a);o.stop(a+.26)});
+ navigator.vibrate&&navigator.vibrate({success:[90],cancelled:[60,60,60],failed:[350]}[k])}
+function result(t,quiet){if(!quiet)tone(t.status);
+ const m={success:['✓','Payment successful','ok'],cancelled:['✕','Prompt cancelled','warn'],failed:['!','Payment failed','bad']}[t.status]||['…','Waiting for customer','warn'];
+ const rows=[['Amount','KES '+fmt(t.amount)],['Phone',t.phone],t.receipt&&['M-Pesa receipt',t.receipt],t.ref&&['Reference',t.ref],['Time',new Date(t.created_at).toLocaleString()],['Result',t.message]].filter(Boolean);
+ const o=document.createElement('div');o.className='ov';o.onclick=e=>e.target===o&&o.remove();
+ o.innerHTML=`<div class="sheet" role="dialog" aria-live="assertive"><div class="ico ${m[2]}">${m[0]}</div><h2>${m[1]}</h2><div class="amt">KES ${fmt(t.amount)}</div><dl>${rows.map(r=>`<div><dt>${r[0]}</dt><dd>${esc(r[1])}</dd></div>`).join('')}</dl><button class="btn">Done</button></div>`;
+ o.querySelector('button').onclick=()=>o.remove();document.body.append(o)}
+function toast(m,k){const t=document.createElement('div');t.className='toast '+(k||'');t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),3800)}
+
+/* first run */
+function install(){app.innerHTML=`<div class="intro splash"><div class="logo">M</div><h1>PayPrompt</h1><p>Send M-Pesa payment prompts to your customers, straight from your phone.</p>${deferred?'<button class="btn light" onclick="doInstall()">Install app</button>':'<div class="note light">To install, open your browser menu and choose <b>Add to Home screen</b>. On iPhone: Share, then Add to Home Screen.</div>'}<a class="lnk" style="color:#fff" onclick="localStorage.skipInstall=1;route()">Continue in browser</a></div>`}
+async function doInstall(){deferred.prompt();await deferred.userChoice;deferred=null}
+const SL=[
+ ['<div class="ring"></div><div class="ring r2"></div><div class="phone"><div class="pop">Pay KES 500 to Mama Mboga?<span>Enter PIN</span></div></div>','Prompt a customer in seconds','Type their number and the amount. They get the M-Pesa PIN prompt on their phone.'],
+ ['<div class="chips"><span>Till</span><span>Paybill</span></div>','Works with Till and Paybill','Set up your Daraja details once. Switch between Till and Paybill any time.'],
+ ['<div class="tick">✓</div><div class="bars"><i></i><i></i><i></i></div>','Know the result at once','A clear card and a distinct sound for successful, cancelled and failed payments.'],
+ ['<div class="days"><i></i><i></i><i></i></div><span class="plane">✈️</span>','Daily history, and Telegram','See each day\'s total at a glance. Send prompts from your Telegram bot too.']];
+function intro(i=0){const s=SL[i],last=i===SL.length-1;app.innerHTML=`<div class="intro"><button class="skip" onclick="endIntro()">Skip</button><div class="art">${s[0]}</div><h1>${s[1]}</h1><p>${s[2]}</p><div class="dots">${SL.map((_,j)=>`<i class="${j===i?'on':''}"></i>`).join('')}</div><button class="btn light" onclick="${last?'endIntro()':`intro(${i+1})`}">${last?'Get started':'Next'}</button></div>`}
+function endIntro(){localStorage.intro=1;route()}
+
+/* auth */
+function auth(mode='login'){const reg=mode==='register';app.innerHTML=`<form class="auth" onsubmit="doAuth(event,'${mode}')"><div class="logo">M</div><h1>${reg?'Create your account':'Welcome back'}</h1>
+<label>Email<input name="email" type="email" autocomplete="email" required></label>
+<label>Password<input name="password" type="password" minlength="8" autocomplete="${reg?'new-password':'current-password'}" required></label>
+${reg?'<label>Confirm password<input name="confirm" type="password" minlength="8" autocomplete="new-password" required></label>':''}
+<button class="btn" id="ab">${reg?'Create account':'Sign in'}</button>
+<small style="text-align:center">${reg?'Have an account?':'New here?'} <a onclick="auth('${reg?'login':'register'}')">${reg?'Sign in':'Create an account'}</a></small></form>`}
+async function doAuth(e,mode){e.preventDefault();const b=$('#ab');b.disabled=true;
+ try{await api('/api/'+mode,{b:Object.fromEntries(new FormData(e.target))});me=await api('/api/me');cur=me.verified?'pay':'me';shell(cur)}catch(x){toast(x.message);b.disabled=false}}
+
+/* shell */
+function shell(tab){cur=tab;app.innerHTML=`<header><b>PayPrompt</b><span class="pill ${me.verified?'':'warn'}">${me.verified?'Ready':'Setup needed'}</span></header><main id="v"></main><nav>${[['pay','Pay','📲'],['hist','History','🧾'],['me','Profile','👤']].map(t=>`<button class="${t[0]===tab?'on':''}" onclick="shell('${t[0]}')"><span>${t[2]}</span>${t[1]}</button>`).join('')}</nav>`;views[tab]()}
+const views={};
+views.pay=()=>{$('#v').innerHTML=`${me.verified?'':'<div class="note">Add and verify your Daraja details to start sending prompts. <a onclick="shell(\'me\')">Open Profile</a></div>'}
+<form class="card" onsubmit="send(event)"><h2>Send a prompt</h2>
+<label>Customer phone<input id="ph" inputmode="tel" placeholder="0712 345 678" required></label>
+<label>Amount (KES)<input id="am" type="number" inputmode="numeric" min="1" placeholder="500" required></label>
+${me.settings?.type==='paybill'?`<label>Account reference <small>Optional. Defaults to ${esc(me.settings.account)}</small><input id="rf" maxlength="12"></label>`:''}
+<button class="btn" id="go">Send prompt</button></form><div id="live"></div>`};
+async function send(e){e.preventDefault();unlock();const b=$('#go');b.disabled=true;
+ try{const{id}=await api('/api/pay',{b:{phone:$('#ph').value,amount:$('#am').value,ref:$('#rf')?.value}});
+  $('#live').innerHTML='<div class="card wait"><div class="spin"></div><div><b>Prompt sent</b><small>Waiting for the customer to enter their PIN</small></div></div>';poll(id)}
+ catch(x){toast(x.message)}b.disabled=false}
+async function poll(id,n=0){if(!$('#live'))return;try{const t=await api('/api/status/'+id);if(t.status!=='pending'){$('#live').innerHTML='';$('#ph').value=$('#am').value='';return result(t)}}catch{}
+ n<60?setTimeout(()=>poll(id,n+1),3000):$('#live').innerHTML='<div class="note">No response yet. Check the History tab in a moment.</div>'}
+const nairobiDay=ms=>new Date(ms+3*36e5).toISOString().slice(0,10);
+const dayLabel=d=>d===nairobiDay(Date.now())?'Today':d===nairobiDay(Date.now()-864e5)?'Yesterday':new Date(d+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+let H={};
+views.hist=async()=>{$('#v').innerHTML='<div class="note">Loading history…</div>';
+ try{const{days}=await api('/api/history');H={};
+ $('#v').innerHTML=days.length?days.map(d=>`<section class="day"><div class="dh"><div><b>${dayLabel(d.date)}</b><small>${d.count} prompt${d.count>1?'s':''}</small></div><div class="tot">KES ${fmt(d.total)}<small>received</small></div></div>${d.tx.map(t=>{H[t.id]=t;return`<div class="row" tabindex="0" onclick="result(H['${t.id}'],1)"><span class="dot ${t.status}"></span><div><b>${esc(t.phone)}</b><small>${t.status}, ${new Date(t.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</small></div><b>KES ${fmt(t.amount)}</b></div>`}).join('')}</section>`).join(''):'<div class="note">No prompts yet. Send your first one from the Pay tab.</div>'}
+ catch(x){$('#v').innerHTML='<div class="note">Could not load history.</div>'}};
+const seg=(n,o,v)=>o.map(a=>`<label><input type="radio" name="${n}" value="${a[0]}" ${a[0]===v?'checked':''} onchange="lab()"><span>${a[1]}</span></label>`).join('');
+function lab(){const t=document.querySelector('[name=type]:checked').value;$('#l1').textContent=t==='till'?'Store number (Head Office)':'Paybill number';$('#l2').textContent=t==='till'?'Till number':'Account number'}
+views.me=()=>{const s=me.settings||{env:'sandbox',type:'paybill'},ph=s.saved?'•••••• saved. Leave blank to keep':'',rq=s.saved?'':'required';
+ $('#v').innerHTML=`<div class="card"><small>Signed in as</small><b>${esc(me.email)}</b></div>
+<form class="card" onsubmit="save(event)"><h2>Daraja details</h2>
+<div class="seg">${seg('env',[['sandbox','Sandbox (testing)'],['live','Live']],s.env)}</div>
+<div class="seg">${seg('type',[['paybill','Paybill'],['till','Till']],s.type)}</div>
+<label><span id="l1"></span><input name="shortcode" inputmode="numeric" value="${esc(s.shortcode)}" required></label>
+<label><span id="l2"></span><input name="account" value="${esc(s.account)}" required></label>
+<label>Consumer key<input name="key" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
+<label>Consumer secret<input name="secret" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
+<label>Passkey<input name="passkey" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
+<button class="btn" id="sv">Save and verify</button>
+<small>${me.verified?'Verified. You can send prompts.':'Prompts unlock once your details are verified.'}</small></form>
+<div class="card"><h2>Telegram</h2>${me.telegram?'<small>Connected. Send your bot a message like <b>0712345678 500</b> to prompt a customer, and it replies with the result.</small><button class="btn ghost" onclick="tgOff()">Disconnect</button>':'<small>Connect your Telegram to send prompts from the bot and get results there.</small><button class="btn" onclick="tgOn()">Connect Telegram</button>'}</div>
+<button class="btn ghost" onclick="logout()">Sign out</button>`;lab()};
+async function save(e){e.preventDefault();const b=$('#sv');b.disabled=true;b.textContent='Verifying…';
+ try{await api('/api/settings',{m:'PUT',b:Object.fromEntries(new FormData(e.target))});toast('Verified. You can start sending prompts.','ok')}catch(x){toast(x.message)}
+ me=await api('/api/me');shell('me')}
+async function tgOn(){try{const{url}=await api('/api/telegram/link',{b:{}});location.href=url}catch(x){toast(x.message)}}
+async function tgOff(){await api('/api/telegram/unlink',{b:{}});me=await api('/api/me');shell('me')}
+async function logout(){await api('/api/logout',{b:{}});me=null;auth()}
+
+/* routing */
+function route(){if(!me&&!standalone&&!localStorage.skipInstall&&!localStorage.intro)return install();
+ if(!localStorage.intro&&!me)return intro();if(!me)return auth('login');shell(me.verified?'pay':'me')}
+(async()=>{try{me=await api('/api/me')}catch{}route()})();
+</script></body></html>
