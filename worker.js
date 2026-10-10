@@ -3,6 +3,7 @@ const b64 = b => btoa(String.fromCharCode(...new Uint8Array(b)));
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const rid = () => [...crypto.getRandomValues(new Uint8Array(16))].map(x => x.toString(16).padStart(2, '0')).join('');
 const json = (d, s = 200, h = {}) => new Response(JSON.stringify(d), { status: s, headers: { 'content-type': 'application/json', ...h } });
+const PRICE = 10000, PERIOD = 30 * 864e5; // KES 100 in cents, 30 days
 const AL = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const mkCode = n => [...crypto.getRandomValues(new Uint8Array(n))].map(x => AL[x % 32]).join('');
 const dash = c => c ? c.match(/.{1,4}/g).join('-') : null;
@@ -30,6 +31,16 @@ async function authUser(req, env) {
   if (!m) return null;
   const u = await env.DB.prepare('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>?').bind(m[1], Date.now()).first();
   return u && withB(env, u);
+}
+async function hmac512(secret, text) {
+  const k = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-512' }, false, ['sign']);
+  return [...new Uint8Array(await crypto.subtle.sign('HMAC', k, enc.encode(text)))].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+async function settleSub(env, ref) {
+  const r = await env.DB.prepare("UPDATE billing SET status='success',paid_at=? WHERE ref=? AND status!='success'").bind(Date.now(), ref).run();
+  if (!r.meta.changes) return;
+  const b = await env.DB.prepare('SELECT user_id FROM billing WHERE ref=?').bind(ref).first();
+  await env.DB.prepare('UPDATE users SET access_until=MAX(COALESCE(access_until,0),?)+? WHERE id=?').bind(Date.now(), PERIOD, b.user_id).run();
 }
 async function startSession(env, uid) {
   const t = rid() + rid();
@@ -81,6 +92,7 @@ async function stkQuery(s, checkoutId) {
 async function sendPrompt(env, u, phone, amount, ref, source, origin) {
   const B = u.B, s = await unseal(env, B.settings);
   if (!s || !B.verified) return { error: u.role === 'staff' ? 'The owner has not finished setting up payments yet.' : 'Add and verify your Daraja details in Profile first.' };
+  if (!(B.access_until > Date.now())) return { error: u.role === 'staff' ? 'The business subscription has ended. Ask the owner to renew.' : 'Your free month has ended. Renew for KES 100 in Profile, Subscription.' };
   const id = rid().slice(0, 12), cbkey = rid();
   let d;
   try { d = await stkPush(s, { phone, amount, ref, cbkey }, origin); } catch { return { error: 'Could not reach Safaricom. Try again.' }; }
@@ -142,6 +154,16 @@ export default {
         if (tx) await finish(env, tx, b.ResultCode, b.ResultDesc, b.CallbackMetadata);
         return json({ ResultCode: 0, ResultDesc: 'OK' });
       }
+      if (p === '/api/paystack/webhook' && M === 'POST') {
+        const raw = await req.text();
+        if (!env.PAYSTACK_SECRET || await hmac512(env.PAYSTACK_SECRET, raw) !== req.headers.get('x-paystack-signature')) return new Response('bad signature', { status: 401 });
+        const ev = JSON.parse(raw), d = ev.data || {};
+        if (String(d.reference || '').startsWith('sub_')) {
+          if (ev.event === 'charge.success' && d.currency === 'KES' && d.amount === PRICE) await settleSub(env, d.reference);
+          else if (ev.event === 'charge.failed') await env.DB.prepare("UPDATE billing SET status='failed' WHERE ref=? AND status='pending'").bind(d.reference).run();
+        }
+        return json({ ok: true });
+      }
       if (p.startsWith('/telegram/webhook/')) return webhook(env, req, p.split('/').pop(), url.origin);
 
       if (M === 'POST' && ['/api/register', '/api/login', '/api/reset'].includes(p)) {
@@ -157,8 +179,8 @@ export default {
           if (inv && !owner) return json({ error: 'That staff invite code is not valid.' }, 400);
           const salt = b64(crypto.getRandomValues(new Uint8Array(16))), rc = mkCode(16);
           try {
-            const r = await env.DB.prepare('INSERT INTO users(email,pass_hash,salt,created_at,role,business_id,recovery_hash) VALUES(?,?,?,?,?,?,?)')
-              .bind(em, await hashPw(password, salt), salt, Date.now(), owner ? 'staff' : 'owner', owner ? owner.id : null, await sha(rc)).run();
+            const r = await env.DB.prepare('INSERT INTO users(email,pass_hash,salt,created_at,role,business_id,recovery_hash,access_until) VALUES(?,?,?,?,?,?,?,?)')
+              .bind(em, await hashPw(password, salt), salt, Date.now(), owner ? 'staff' : 'owner', owner ? owner.id : null, await sha(rc), owner ? null : Date.now() + PERIOD).run();
             const id = r.meta.last_row_id;
             if (!owner) await env.DB.prepare('UPDATE users SET business_id=? WHERE id=?').bind(id, id).run();
             return json({ ok: true, recovery: dash(rc) }, 200, await startSession(env, id));
@@ -185,10 +207,39 @@ export default {
       const B = u.B, staff = u.role === 'staff', s = await unseal(env, B.settings);
       const col = staff ? 'user_id' : 'business_id', cid = staff ? u.id : B.id;
 
+      if (p === '/api/billing/pay' && M === 'POST') {
+        if (staff) return json({ error: 'Only the owner can pay for the subscription.' }, 403);
+        if (!env.PAYSTACK_SECRET) return json({ error: 'Subscription payments are not set up yet.' }, 503);
+        const ph = normPhone((await req.json()).phone);
+        if (!ph) return json({ error: 'Enter a valid Safaricom number, e.g. 0712345678.' }, 400);
+        const ref = 'sub_' + rid().slice(0, 16);
+        const r = await fetch('https://api.paystack.co/charge', { method: 'POST', headers: { Authorization: 'Bearer ' + env.PAYSTACK_SECRET, 'content-type': 'application/json' },
+          body: JSON.stringify({ email: u.email, amount: PRICE, currency: 'KES', reference: ref, mobile_money: { phone: '+' + ph, provider: 'mpesa' }, metadata: { user_id: u.id } }) });
+        const d = await r.json().catch(() => ({}));
+        if (!d.status) return json({ error: d.message || 'Could not start the payment.' }, 400);
+        await env.DB.prepare('INSERT INTO billing(ref,user_id,amount,status,created_at) VALUES(?,?,?,?,?)').bind(ref, u.id, PRICE, 'pending', Date.now()).run();
+        return json({ ref });
+      }
+      if (p.startsWith('/api/billing/status/')) {
+        const ref = p.split('/').pop();
+        let row = await env.DB.prepare('SELECT status FROM billing WHERE ref=? AND user_id=?').bind(ref, u.id).first();
+        if (!row) return json({ error: 'Not found' }, 404);
+        if (row.status === 'pending' && env.PAYSTACK_SECRET) {
+          try {
+            const v = await (await fetch('https://api.paystack.co/transaction/verify/' + ref, { headers: { Authorization: 'Bearer ' + env.PAYSTACK_SECRET } })).json();
+            if (v.data?.status === 'success' && v.data.amount === PRICE && v.data.currency === 'KES') await settleSub(env, ref);
+            else if (['failed', 'abandoned', 'reversed'].includes(v.data?.status)) await env.DB.prepare("UPDATE billing SET status='failed' WHERE ref=? AND status='pending'").bind(ref).run();
+          } catch {}
+          row = await env.DB.prepare('SELECT status FROM billing WHERE ref=?').bind(ref).first();
+        }
+        return json({ status: row.status });
+      }
       if (p === '/api/me') {
+        const bill = await env.DB.prepare("SELECT COUNT(*) n FROM billing WHERE user_id=? AND status='success'").bind(B.id).first();
         const [a, z] = dayRange(Date.now());
         const t = await env.DB.prepare(`SELECT COALESCE(SUM(amount),0) total,COUNT(*) n FROM tx WHERE ${col}=? AND status='success' AND created_at>=? AND created_at<?`).bind(cid, a, z).first();
         return json({ email: u.email, role: staff ? 'staff' : 'owner', verified: !!B.verified, telegram: !!u.tg_chat, today: t,
+          billing: { until: B.access_until || 0, active: (B.access_until || 0) > Date.now(), paid: bill.n > 0 },
           settings: s ? (staff ? { type: s.type, account: s.account } : { env: s.env, type: s.type, shortcode: s.shortcode, account: s.account, saved: true }) : null });
       }
 

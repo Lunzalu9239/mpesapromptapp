@@ -106,6 +106,17 @@ addEventListener('appinstalled',()=>{app.innerHTML='<div class="intro splash"><d
 addEventListener('visibilitychange',async()=>{if(document.hidden){hiddenAt=Date.now();return}
  if(!me||locked)return;if(LK()&&Date.now()-hiddenAt>30000)return lockScreen();
  if(cur==='me'){me=await api('/api/me');shell('me')}});
+const hst=()=>({app:1,tab:cur,sub}),hpush=()=>history.pushState(hst(),''),hrep=()=>history.replaceState(hst(),'');
+function enter(t){shell(t);if(history.state&&history.state.app)hrep();else{history.replaceState({guard:1},'');hpush()}}
+function nav(t){const same=t===cur&&sub===null;sub=null;shell(t);same?hrep():hpush()}
+function bk(){sub=null;shell('me');hrep()}
+addEventListener('popstate',e=>{const st=e.state||{},o=document.querySelector('.ov');
+ if(locked||(o&&o._sticky)){history.go(1);return}
+ if(o){o.remove();history.go(1);return}
+ if(st.guard){history.back();return}
+ if(st.auth!=null){me?history.back():auth(st.auth);return}
+ if(st.intro!=null){(localStorage.intro||me)?history.back():intro(st.intro);return}
+ if(st.app){if(!me){history.back();return}if(st.tab===cur&&st.sub===sub)return;sub=st.sub||null;shell(st.tab)}});
 const pickTab=()=>{if(me.verified||me.role==='staff')return'pay';sub='biz';return'me'};
 
 /* sound + cards */
@@ -128,7 +139,7 @@ function result(t,quiet){if(!quiet)tone(t.status);
  const bad=t.status==='cancelled'||t.status==='failed';const o=modal(`<div class="ico ${m[2]}">${m[0]}</div><h2>${m[1]}</h2><div class="amt">KES ${fmt(t.amount)}</div><dl>${rows.map(r=>`<div><dt>${r[0]}</dt><dd>${esc(r[1])}</dd></div>`).join('')}</dl>${bad?'<button class="btn" id="rs">Resend prompt</button><button class="btn soft" id="dn">Close</button>':'<button class="btn" id="dn">Done</button>'}`);
  o.querySelector('#dn').onclick=()=>o.remove();const rs=o.querySelector('#rs');if(rs)rs.onclick=()=>{o.remove();resend(t)}}
 function info(title,code,note,cb){const o=modal(`<h2>${title}</h2><div class="code">${esc(code)}</div><small>${note}</small><button class="btn" id="cp">Copy</button><button class="btn soft" id="dn">Done</button>`);
- o.onclick=null;o.querySelector('#cp').onclick=()=>navigator.clipboard?.writeText(code).then(()=>toast('Copied','ok'));o.querySelector('#dn').onclick=()=>{o.remove();cb&&cb()}}
+ o.onclick=null;o._sticky=true;o.querySelector('#cp').onclick=()=>navigator.clipboard?.writeText(code).then(()=>toast('Copied','ok'));o.querySelector('#dn').onclick=()=>{o.remove();cb&&cb()}}
 function toast(m,k){const t=document.createElement('div');t.className='toast '+(k||'');t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),3800)}
 
 /* install + intro */
@@ -139,11 +150,11 @@ const SL=[
  ['<div class="chips"><span>Till</span><span>Paybill</span></div>','Works with Till and Paybill','Set up your Daraja details once. Add your staff so everyone prompts into one business.'],
  ['<div class="tick">✓</div><div class="bars"><i></i><i></i><i></i></div>','Know the result at once','A clear card, your total cash so far today, and a distinct sound for each outcome.'],
  ['<div class="days"><i></i><i></i><i></i></div><span class="plane">✈️</span>','Daily records, and Telegram','See each day\'s total at a glance. Send prompts from your Telegram bot too.']];
-function intro(i=0){const s=SL[i],last=i===SL.length-1;app.innerHTML=`<div class="intro"><button class="skip" onclick="endIntro()">Skip</button><div class="art">${s[0]}</div><h1>${s[1]}</h1><p>${s[2]}</p><div class="dots">${SL.map((_,j)=>`<i class="${j===i?'on':''}"></i>`).join('')}</div><button class="btn light" onclick="${last?'endIntro()':`intro(${i+1})`}">${last?'Get started':'Next'}</button></div>`}
+function intro(i=0,user){history[user?'pushState':'replaceState']({intro:i},'');const s=SL[i],last=i===SL.length-1;app.innerHTML=`<div class="intro"><button class="skip" onclick="endIntro()">Skip</button><div class="art">${s[0]}</div><h1>${s[1]}</h1><p>${s[2]}</p><div class="dots">${SL.map((_,j)=>`<i class="${j===i?'on':''}"></i>`).join('')}</div><button class="btn light" onclick="${last?'endIntro()':`intro(${i+1},1)`}">${last?'Get started':'Next'}</button></div>`}
 function endIntro(){localStorage.intro=1;route()}
 
 /* auth: sign in, register (owner or staff), forgot password */
-function auth(mode='login'){const reg=mode==='register',fg=mode==='forgot',pw=reg||fg;
+function auth(mode='login',user){history[user?'pushState':'replaceState']({auth:mode},'');const reg=mode==='register',fg=mode==='forgot',pw=reg||fg;
  app.innerHTML=`<form class="auth" onsubmit="doAuth(event,'${mode}')"><div class="logo">M</div><h1>${fg?'Reset your password':reg?'Create your account':'Welcome back'}</h1>
 <label>Email<input name="email" type="email" autocomplete="email" required></label>
 ${fg?'<label>Recovery code<input name="code" autocapitalize="characters" autocomplete="off" placeholder="XXXX-XXXX-XXXX-XXXX" required></label>':''}
@@ -151,14 +162,14 @@ ${fg?'<label>Recovery code<input name="code" autocapitalize="characters" autocom
 ${pw?'<label>Confirm password<input name="confirm" type="password" minlength="8" autocomplete="new-password" required></label>':''}
 ${reg?'<label>Staff invite code <small>Only if you are joining a shop. Leave empty to start your own.</small><input name="invite" autocapitalize="characters" autocomplete="off"></label>':''}
 <button class="btn" id="ab">${fg?'Reset password':reg?'Create account':'Sign in'}</button>
-${mode==='login'?'<small style="text-align:center"><a onclick="auth(\'forgot\')">Forgot password?</a></small>':''}
-<small style="text-align:center">${pw?'Have an account?':'New here?'} <a onclick="auth('${pw?'login':'register'}')">${pw?'Sign in':'Create an account'}</a></small><small style="text-align:center">Need help? <a href="tel:+254703719381">Call</a> or <a href="https://wa.me/254703719381" target="_blank" rel="noopener">WhatsApp</a></small></form>`}
+${mode==='login'?'<small style="text-align:center"><a onclick="auth(\'forgot\',1)">Forgot password?</a></small>':''}
+<small style="text-align:center">${pw?'Have an account?':'New here?'} <a onclick="auth('${pw?'login':'register'}',1)">${pw?'Sign in':'Create an account'}</a></small><small style="text-align:center">Need help? <a href="tel:+254703719381">Call</a> or <a href="https://wa.me/254703719381" target="_blank" rel="noopener">WhatsApp</a></small></form>`}
 async function doAuth(e,mode){e.preventDefault();const b=$('#ab');b.disabled=true;
  try{const r=await api('/api/'+(mode==='forgot'?'reset':mode),{b:Object.fromEntries(new FormData(e.target))});
   if(mode==='forgot')return info('Password changed',r.recovery,'This is your new recovery code. The old one no longer works. Keep it safe.',()=>auth('login'));
   me=await api('/api/me');cur=pickTab();
-  if(r.recovery)return info('Save your recovery code',r.recovery,'If you forget your password, this code is the only way to reset it yourself. It is shown once.',()=>shell(cur));
-  shell(cur)}catch(x){toast(x.message);b.disabled=false}}
+  if(r.recovery)return info('Save your recovery code',r.recovery,'If you forget your password, this code is the only way to reset it yourself. It is shown once.',()=>enter(cur));
+  enter(cur)}catch(x){toast(x.message);b.disabled=false}}
 
 /* app lock: PIN + fingerprint (stored on this device only) */
 const LK=()=>localStorage.lockpin;
@@ -169,7 +180,7 @@ function lockScreen(){locked=true;pin='';drawLock();if(localStorage.lockbio)bioU
 function drawLock(){app.innerHTML=`<div class="intro lock"><div class="logo">M</div><h1>Enter your PIN</h1><div class="pd">${[0,1,2,3].map(i=>`<i class="${i<pin.length?'on':''}"></i>`).join('')}</div><div class="kp">${[1,2,3,4,5,6,7,8,9,localStorage.lockbio?'👆':'',0,'⌫'].map(k=>k===''?'<span></span>':`<button onclick="kp('${k}')">${k}</button>`).join('')}</div><a class="lnk" style="color:#fff" onclick="forgotPin()">Forgot PIN? Sign out</a></div>`}
 async function kp(k){if(k==='👆')return bioUnlock();if(k==='⌫')pin=pin.slice(0,-1);else if(pin.length<4)pin+=k;drawLock();
  if(pin.length===4){if(await sha(pin)===LK())openApp();else{toast('Wrong PIN');pin='';setTimeout(drawLock,300)}}}
-function openApp(){locked=false;shell(cur||pickTab())}
+function openApp(){locked=false;enter(cur||pickTab())}
 async function forgotPin(){localStorage.removeItem('lockpin');localStorage.removeItem('lockbio');await logout()}
 async function bioUnlock(){try{await navigator.credentials.get({publicKey:{challenge:rnd(32),allowCredentials:[{type:'public-key',id:fromB(localStorage.lockbio)}],userVerification:'required',timeout:60000}});openApp()}catch{toast('Fingerprint not recognised. Use your PIN.')}}
 async function bioOn(){try{const c=await navigator.credentials.create({publicKey:{challenge:rnd(32),rp:{name:'PayPrompt'},user:{id:rnd(16),name:me.email,displayName:me.email},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required'},timeout:60000}});localStorage.lockbio=toB(c.rawId);toast('Fingerprint turned on','ok');shell('me')}catch{toast('Could not set up a fingerprint on this device')}}
@@ -197,13 +208,27 @@ ${row('success','Successful payment',TONES)}${row('cancelled','Cancelled payment
 function helpCard(){const n=[['0703 719 381','254703719381'],['0104 510 021','254104510021']];
  return `<div class="card"><h2>Need help?</h2><small>Call or message us on WhatsApp.</small>${n.map(x=>`<div><b>${x[0]}</b><div class="two"><a class="btn" href="tel:+${x[1]}">Call</a><a class="btn soft" href="https://wa.me/${x[1]}?text=Hello%2C%20I%20need%20help%20with%20PayPrompt" target="_blank" rel="noopener">WhatsApp</a></div></div>`).join('')}</div>`}
 function installCard(){return `<div class="card"><h2>Install app</h2>${deferred?'<small>Add PayPrompt to your home screen so it opens like a normal app.</small><button class="btn" onclick="doInstall()">Install app</button>':'<small>Open your browser menu and choose <b>Install app</b> or <b>Add to Home screen</b>. On iPhone: Share, then Add to Home Screen.</small>'}</div>`}
+function subText(){const b=me.billing,d=new Date(b.until).toLocaleDateString(undefined,{day:'numeric',month:'short'});return b.active?(b.paid?'Active until ':'Free trial until ')+d:'Ended. Renew for KES 100'}
+function billNote(){const b=me.billing;if(!b)return'';const d=Math.ceil((b.until-Date.now())/864e5);
+ if(!b.active)return me.role==='staff'?`<div class="note">The business subscription has ended. Ask the owner to renew.</div>`:`<div class="note">Your free month has ended. Renew for KES 100 to keep sending prompts. <a onclick="go('sub')">Renew</a></div>`;
+ return d<=5&&me.role==='owner'?`<div class="note">${b.paid?'Your subscription':'Your free month'} ends in ${d} day${d===1?'':'s'}. <a onclick="go('sub')">Renew</a></div>`:''}
+function subCard(){const b=me.billing,d=new Date(b.until).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
+ return `<div class="card"><h2>Subscription</h2><div class="today"><div><small>${b.active?(b.paid?'Active until':'Free trial until'):'Ended on'}</small><b>${d}</b></div><small>KES 100 a month</small></div>
+<small>Every account gets one free month, then it is KES 100 a month. M-Pesa cannot charge you automatically, so each month you confirm one prompt on your phone. Renewing early adds a month on top of your current end date.</small>
+<form onsubmit="payBill(event)" style="display:contents"><label>M-Pesa number to charge<input id="bph" inputmode="tel" placeholder="0712 345 678" required></label><button class="btn" id="bgo">${b.active?'Pay KES 100 for the next month':'Pay KES 100 to renew'}</button></form><div id="blive"></div></div>`}
+async function payBill(e){e.preventDefault();unlock();const b=$('#bgo');b.disabled=true;
+ try{const{ref}=await api('/api/billing/pay',{b:{phone:$('#bph').value}});$('#blive').innerHTML='<div class="card wait"><div class="spin"></div><div><b>Prompt sent</b><small>Enter your M-Pesa PIN on your phone to confirm KES 100</small></div></div>';billPoll(ref)}catch(x){toast(x.message)}b.disabled=false}
+async function billPoll(ref,n=0){if(!$('#blive'))return;try{const r=await api('/api/billing/status/'+ref);
+  if(r.status==='success'){me=await api('/api/me');tone('success');shell('me');return toast('Payment received. Subscription renewed.','ok')}
+  if(r.status==='failed'){$('#blive').innerHTML='';tone('failed');return toast('The payment was not completed. You can try again.')}}catch{}
+ n<60?setTimeout(()=>billPoll(ref,n+1),3000):$('#blive').innerHTML='<div class="note">Still waiting. If you confirmed on your phone, your subscription updates shortly.</div>'}
 function lockCard(){const on=!!LK(),bio=!!localStorage.lockbio;
  return `<div class="card"><h2>App lock</h2>${on?`<small>PIN lock is on. The app locks after 30 seconds away.</small>${window.PublicKeyCredential?`<button class="btn soft" onclick="${bio?'bioOff()':'bioOn()'}">${bio?'Turn off fingerprint':'Use fingerprint'}</button>`:''}<button class="btn ghost" onclick="pinOff()">Turn off lock</button>`:'<small>Ask for a PIN when the app opens. You can add your fingerprint after.</small><input id="p1" type="password" inputmode="numeric" maxlength="4" placeholder="New 4-digit PIN"><input id="p2" type="password" inputmode="numeric" maxlength="4" placeholder="Confirm PIN"><button class="btn" onclick="pinOn()">Turn on PIN lock</button>'}</div>`}
 
 /* shell + views */
-function shell(tab){cur=tab;app.innerHTML=`<header><b>PayPrompt</b><span class="pill ${me.verified?'':'warn'}">${me.verified?(me.role==='staff'?'Staff':'Ready'):'Setup needed'}</span></header><main id="v"></main><nav>${[['pay','Pay','📲'],['hist','History','🧾'],['me','Profile','👤']].map(t=>`<button class="${t[0]===tab?'on':''}" onclick="${t[0]==='me'?'sub=null;':''}shell('${t[0]}')"><span>${t[2]}</span>${t[1]}</button>`).join('')}</nav>`;views[tab]()}
+function shell(tab){cur=tab;app.innerHTML=`<header><b>PayPrompt</b><span class="pill ${me.verified?'':'warn'}">${me.verified?(me.role==='staff'?'Staff':'Ready'):'Setup needed'}</span></header><main id="v"></main><nav>${[['pay','Pay','📲'],['hist','History','🧾'],['me','Profile','👤']].map(t=>`<button class="${t[0]===tab?'on':''}" onclick="nav('${t[0]}')"><span>${t[2]}</span>${t[1]}</button>`).join('')}</nav>`;views[tab]()}
 const views={};
-views.pay=()=>{$('#v').innerHTML=`${me.verified?'':me.role==='staff'?'<div class="note">The owner has not finished setting up payments yet.</div>':'<div class="note">Add and verify your Daraja details to start sending prompts. <a onclick="go(\'biz\')">Add details</a></div>'}
+views.pay=()=>{$('#v').innerHTML=`${billNote()}${me.verified?'':me.role==='staff'?'<div class="note">The owner has not finished setting up payments yet.</div>':'<div class="note">Add and verify your Daraja details to start sending prompts. <a onclick="go(\'biz\')">Add details</a></div>'}
 <div class="today"><div><small>${me.role==='staff'?'Your total today':'Total cash today'}</small><b id="td">KES ${fmt(me.today.total)}</b></div><small id="tn">${me.today.n} payment${me.today.n===1?'':'s'}</small></div>
 <form class="card" onsubmit="send(event)"><h2>Send a prompt</h2>
 <label>Customer phone<input id="ph" inputmode="tel" placeholder="0712 345 678" required></label>
@@ -226,7 +251,7 @@ views.hist=async()=>{$('#v').innerHTML='<div class="note">Loading records…</di
  catch(x){$('#v').innerHTML='<div class="note">Could not load records.</div>'}};
 const seg=(n,o,v)=>o.map(a=>`<label><input type="radio" name="${n}" value="${a[0]}" ${a[0]===v?'checked':''} onchange="lab()"><span>${a[1]}</span></label>`).join('');
 function lab(){const t=document.querySelector('[name=type]:checked').value;$('#l1').textContent=t==='till'?'Store number (Head Office)':'Paybill number';$('#l2').textContent=t==='till'?'Till number':'Account number'}
-const go=s=>{sub=s;shell('me')};
+const go=s=>{sub=s;shell('me');hpush()};
 function bizCard(){const s=me.settings||{env:'sandbox',type:'paybill'},ph=s.saved?'•••••• saved. Leave blank to keep':'',rq=s.saved?'':'required';return `<form class="card" onsubmit="save(event)"><h2>Daraja details</h2><button type="button" class="btn soft" onclick="guide()">Where do I find my business details?</button>
 <div class="seg">${seg('env',[['sandbox','Sandbox (testing)'],['live','Live']],s.env)}</div>
 <div class="seg">${seg('type',[['paybill','Paybill'],['till','Till']],s.type)}</div>
@@ -239,13 +264,13 @@ function bizCard(){const s=me.settings||{env:'sandbox',type:'paybill'},ph=s.save
 <small>${me.verified?'Verified. You can send prompts.':'Prompts unlock once your details are verified.'}</small></form>`}
 function staffCard(){return '<div class="card"><h2>Staff</h2><div id="stf"><small>Loading…</small></div></div>'}
 function tgCard(){return `<div class="card"><h2>Telegram</h2>${me.telegram?'<small>Connected. Send your bot a message like <b>0712345678 500</b> to prompt a customer, and it replies with the result and your total today.</small><button class="btn ghost" onclick="tgOff()">Disconnect</button>':'<small>Connect your Telegram to send prompts from the bot and get results there.</small><button class="btn" onclick="tgOn()">Connect Telegram</button>'}</div>`}
-const SUBS={biz:bizCard,staff:staffCard,sound:soundCard,lock:lockCard,tg:tgCard,install:installCard,help:helpCard};
+const SUBS={sub:subCard,biz:bizCard,staff:staffCard,sound:soundCard,lock:lockCard,tg:tgCard,install:installCard,help:helpCard};
 const mi=(k,ic,t,d)=>`<button class="mi" onclick="go('${k}')"><span class="mic">${ic}</span><span><b>${t}</b><small>${d}</small></span><i>›</i></button>`;
 views.me=()=>{const own=me.role==='owner',v=$('#v');
- if(sub&&SUBS[sub]&&(own||(sub!=='biz'&&sub!=='staff'))){v.innerHTML=`<button class="bk" onclick="go(null)">‹ Settings</button>${SUBS[sub]()}`;if(sub==='biz')lab();if(sub==='staff')loadStaff();return}
+ if(sub&&SUBS[sub]&&(own||!['biz','staff','sub'].includes(sub))){v.innerHTML=`<button class="bk" onclick="bk()">‹ Settings</button>${SUBS[sub]()}`;if(sub==='biz')lab();if(sub==='staff')loadStaff();return}
  sub=null;
  v.innerHTML=`<div class="card"><small>Signed in as ${own?'owner':'staff'}</small><b>${esc(me.email)}</b></div>
-${own?`<div class="grp">Business</div><div class="list">${mi('biz','🏪','Business details',me.verified?'Verified, ready for prompts':'Not set up yet')}${mi('staff','👥','Staff','Invite and manage staff')}</div>`:'<div class="note">Payment details are managed by the business owner. Everything you send goes into the shared business till.</div>'}
+${own?`<div class="grp">Business</div><div class="list">${mi('biz','🏪','Business details',me.verified?'Verified, ready for prompts':'Not set up yet')}${mi('sub','💳','Subscription',subText())}${mi('staff','👥','Staff','Invite and manage staff')}</div>`:'<div class="note">Payment details are managed by the business owner. Everything you send goes into the shared business till.</div>'}
 <div class="grp">Preferences</div><div class="list">${mi('sound','🔔','Sounds',localStorage.mute?'Off':'On')}${mi('lock','🔒','App lock',LK()?'On':'Off')}${mi('tg','✈️','Telegram',me.telegram?'Connected':'Not connected')}</div>
 <div class="grp">More</div><div class="list">${standalone?'':mi('install','📲','Install app','Add to your home screen')}${mi('help','💬','Help','Call or WhatsApp')}</div>
 <button class="btn ghost" onclick="logout()">Sign out</button>`};
@@ -261,6 +286,6 @@ async function tgOff(){await api('/api/telegram/unlink',{b:{}});me=await api('/a
 async function logout(){await api('/api/logout',{b:{}});me=null;locked=false;auth()}
 
 function route(){if(!me&&!standalone&&!localStorage.skipInstall&&!localStorage.intro)return install();
- if(!localStorage.intro&&!me)return intro();if(!me)return auth('login');if(LK()&&!locked&&!app.querySelector('header'))return lockScreen();shell(pickTab())}
+ if(!localStorage.intro&&!me)return intro();if(!me)return auth('login');if(LK()&&!locked&&!app.querySelector('header'))return lockScreen();enter(pickTab())}
 (async()=>{try{me=await api('/api/me')}catch{}route()})();
 </script></body></html>
