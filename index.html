@@ -143,7 +143,7 @@ function info(title,code,note,cb){const o=modal(`<h2>${title}</h2><div class="co
 function toast(m,k){const t=document.createElement('div');t.className='toast '+(k||'');t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),3800)}
 
 /* install + intro */
-function install(){app.innerHTML=`<div class="intro splash"><div class="logo">M</div><h1>PayPrompt</h1><p>Send M-Pesa payment prompts to your customers, straight from your phone.</p>${deferred?'<button class="btn light" onclick="doInstall()">Install app</button>':'<div class="note light">To install, open your browser menu and choose <b>Add to Home screen</b>. On iPhone: Share, then Add to Home Screen.</div>'}<a class="lnk" style="color:#fff" onclick="localStorage.skipInstall=1;route()">Continue in browser</a></div>`}
+function install(){app.innerHTML=`<div class="intro splash"><div class="logo">M</div><h1>PayPrompt</h1><p>Send M-Pesa payment prompts to your customers, straight from your phone.</p>${deferred?'<button class="btn light" onclick="doInstall()">Install app</button>':'<div class="note light">To install, open your browser menu and choose <b>Add to Home screen</b>. On iPhone: Share, then Add to Home Screen.</div>'}<a class="lnk" style="color:#fff" onclick="localStorage.skipInstall=1;route()">Continue</a></div>`}
 async function doInstall(){deferred.prompt();await deferred.userChoice;deferred=null}
 const SL=[
  ['<div class="ring"></div><div class="ring r2"></div><div class="phone"><div class="pop">Pay KES 500 to Mama Mboga?<span>Enter PIN</span></div></div>','Prompt a customer in seconds','Type their number and the amount. They get the M-Pesa PIN prompt on their phone.'],
@@ -167,7 +167,7 @@ ${mode==='login'?'<small style="text-align:center"><a onclick="auth(\'forgot\',1
 async function doAuth(e,mode){e.preventDefault();const b=$('#ab');b.disabled=true;
  try{const r=await api('/api/'+(mode==='forgot'?'reset':mode),{b:Object.fromEntries(new FormData(e.target))});
   if(mode==='forgot')return info('Password changed',r.recovery,'This is your new recovery code. The old one no longer works. Keep it safe.',()=>auth('login'));
-  me=await api('/api/me');cur=pickTab();
+  me=await api('/api/me');localStorage.skipInstall=1;cur=pickTab();
   if(r.recovery)return info('Save your recovery code',r.recovery,'If you forget your password, this code is the only way to reset it yourself. It is shown once.',()=>enter(cur));
   enter(cur)}catch(x){toast(x.message);b.disabled=false}}
 
@@ -285,7 +285,7 @@ async function tgOn(){try{const{url}=await api('/api/telegram/link',{b:{}});loca
 async function tgOff(){await api('/api/telegram/unlink',{b:{}});me=await api('/api/me');shell('me')}
 async function logout(){await api('/api/logout',{b:{}});me=null;locked=false;auth()}
 
-function route(){if(!me&&!standalone&&!localStorage.skipInstall&&!localStorage.intro)return install();
+function route(){if(!me&&!standalone&&!localStorage.skipInstall&&!localStorage.intro){localStorage.skipInstall=1;return install()}
  if(!localStorage.intro&&!me)return intro();if(!me)return auth('login');if(LK()&&!locked&&!app.querySelector('header'))return lockScreen();enter(pickTab())}
-(async()=>{try{me=await api('/api/me')}catch{}route()})();
+(async()=>{try{me=await api('/api/me');localStorage.skipInstall=1}catch{}route()})();
 </script></body></html>
