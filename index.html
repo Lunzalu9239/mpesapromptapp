@@ -86,6 +86,11 @@ label.sw{flex-direction:row;align-items:center;justify-content:space-between;gap
 select{border:1.5px solid #cfe3d6;border-radius:12px;padding:13px 12px;background:#fbfefc;color:var(--ink);width:100%;font:inherit}input[type=range]{padding:0;accent-color:var(--g)}
 .sr{display:flex;gap:10px;align-items:flex-end}.sr label{flex:1}.pvb{width:48px;height:48px;border-radius:12px;border:0;background:var(--gl);color:var(--gd);font-size:1rem;flex:none;cursor:pointer}
 a.btn{display:block;text-align:center;text-decoration:none}.two{display:flex;gap:10px;margin-top:8px}.two .btn{flex:1;padding:13px}
+.grp{font-size:.74rem;font-weight:700;color:var(--mute);text-transform:uppercase;letter-spacing:.07em;margin:6px 4px -4px}
+.list{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:0 2px 14px #0a3d2412}
+.mi{display:flex;align-items:center;gap:14px;width:100%;background:none;border:0;border-top:1px solid #edf5f0;padding:13px 16px;text-align:left;cursor:pointer;color:var(--ink)}.list .mi:first-child{border-top:0}
+.mi>span:nth-child(2){flex:1}.mi b{display:block}.mic{width:42px;height:42px;border-radius:12px;background:var(--gl);display:grid;place-items:center;font-size:1.25rem;flex:none}.mi i{font-style:normal;color:var(--mute);font-size:1.5rem}
+.bk{align-self:flex-start;border:0;background:none;color:var(--gd);font-weight:700;font-size:1rem;padding:2px 0;cursor:pointer}
 </style></head>
 <body><div id="app"></div>
 <script>
@@ -94,14 +99,14 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const fmt=n=>Number(n).toLocaleString('en-KE');
 const api=async(p,o={})=>{const r=await fetch(p,{method:o.m||(o.b?'POST':'GET'),headers:{'content-type':'application/json'},body:o.b&&JSON.stringify(o.b)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(d.error||'Something went wrong'),{status:r.status});return d};
 const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
-let me=null,deferred=null,cur='pay',locked=false,hiddenAt=0,pin='';
+let me=null,deferred=null,sub=null,cur='pay',locked=false,hiddenAt=0,pin='';
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;if($('.splash'))install();else if(me&&cur==='me'&&!locked)shell('me')});
 addEventListener('appinstalled',()=>{app.innerHTML='<div class="intro splash"><div class="logo">✓</div><h1>App installed</h1><p>Open PayPrompt from your home screen to get started.</p></div>'});
 addEventListener('visibilitychange',async()=>{if(document.hidden){hiddenAt=Date.now();return}
  if(!me||locked)return;if(LK()&&Date.now()-hiddenAt>30000)return lockScreen();
  if(cur==='me'){me=await api('/api/me');shell('me')}});
-const pickTab=()=>me.verified||me.role==='staff'?'pay':'me';
+const pickTab=()=>{if(me.verified||me.role==='staff')return'pay';sub='biz';return'me'};
 
 /* sound + cards */
 let ac;const unlock=()=>{ac=ac||new(window.AudioContext||window.webkitAudioContext)();ac.resume()};
@@ -196,9 +201,9 @@ function lockCard(){const on=!!LK(),bio=!!localStorage.lockbio;
  return `<div class="card"><h2>App lock</h2>${on?`<small>PIN lock is on. The app locks after 30 seconds away.</small>${window.PublicKeyCredential?`<button class="btn soft" onclick="${bio?'bioOff()':'bioOn()'}">${bio?'Turn off fingerprint':'Use fingerprint'}</button>`:''}<button class="btn ghost" onclick="pinOff()">Turn off lock</button>`:'<small>Ask for a PIN when the app opens. You can add your fingerprint after.</small><input id="p1" type="password" inputmode="numeric" maxlength="4" placeholder="New 4-digit PIN"><input id="p2" type="password" inputmode="numeric" maxlength="4" placeholder="Confirm PIN"><button class="btn" onclick="pinOn()">Turn on PIN lock</button>'}</div>`}
 
 /* shell + views */
-function shell(tab){cur=tab;app.innerHTML=`<header><b>PayPrompt</b><span class="pill ${me.verified?'':'warn'}">${me.verified?(me.role==='staff'?'Staff':'Ready'):'Setup needed'}</span></header><main id="v"></main><nav>${[['pay','Pay','📲'],['hist','History','🧾'],['me','Profile','👤']].map(t=>`<button class="${t[0]===tab?'on':''}" onclick="shell('${t[0]}')"><span>${t[2]}</span>${t[1]}</button>`).join('')}</nav>`;views[tab]()}
+function shell(tab){cur=tab;app.innerHTML=`<header><b>PayPrompt</b><span class="pill ${me.verified?'':'warn'}">${me.verified?(me.role==='staff'?'Staff':'Ready'):'Setup needed'}</span></header><main id="v"></main><nav>${[['pay','Pay','📲'],['hist','History','🧾'],['me','Profile','👤']].map(t=>`<button class="${t[0]===tab?'on':''}" onclick="${t[0]==='me'?'sub=null;':''}shell('${t[0]}')"><span>${t[2]}</span>${t[1]}</button>`).join('')}</nav>`;views[tab]()}
 const views={};
-views.pay=()=>{$('#v').innerHTML=`${me.verified?'':me.role==='staff'?'<div class="note">The owner has not finished setting up payments yet.</div>':'<div class="note">Add and verify your Daraja details to start sending prompts. <a onclick="shell(\'me\')">Open Profile</a></div>'}
+views.pay=()=>{$('#v').innerHTML=`${me.verified?'':me.role==='staff'?'<div class="note">The owner has not finished setting up payments yet.</div>':'<div class="note">Add and verify your Daraja details to start sending prompts. <a onclick="go(\'biz\')">Add details</a></div>'}
 <div class="today"><div><small>${me.role==='staff'?'Your total today':'Total cash today'}</small><b id="td">KES ${fmt(me.today.total)}</b></div><small id="tn">${me.today.n} payment${me.today.n===1?'':'s'}</small></div>
 <form class="card" onsubmit="send(event)"><h2>Send a prompt</h2>
 <label>Customer phone<input id="ph" inputmode="tel" placeholder="0712 345 678" required></label>
@@ -221,9 +226,8 @@ views.hist=async()=>{$('#v').innerHTML='<div class="note">Loading records…</di
  catch(x){$('#v').innerHTML='<div class="note">Could not load records.</div>'}};
 const seg=(n,o,v)=>o.map(a=>`<label><input type="radio" name="${n}" value="${a[0]}" ${a[0]===v?'checked':''} onchange="lab()"><span>${a[1]}</span></label>`).join('');
 function lab(){const t=document.querySelector('[name=type]:checked').value;$('#l1').textContent=t==='till'?'Store number (Head Office)':'Paybill number';$('#l2').textContent=t==='till'?'Till number':'Account number'}
-views.me=()=>{const own=me.role==='owner',s=me.settings||{env:'sandbox',type:'paybill'},ph=s.saved?'•••••• saved. Leave blank to keep':'',rq=s.saved?'':'required';
- $('#v').innerHTML=`<div class="card"><small>Signed in as ${own?'owner':'staff'}</small><b>${esc(me.email)}</b></div>
-${own?`<form class="card" onsubmit="save(event)"><h2>Daraja details</h2><button type="button" class="btn soft" onclick="guide()">Where do I find my business details?</button>
+const go=s=>{sub=s;shell('me')};
+function bizCard(){const s=me.settings||{env:'sandbox',type:'paybill'},ph=s.saved?'•••••• saved. Leave blank to keep':'',rq=s.saved?'':'required';return `<form class="card" onsubmit="save(event)"><h2>Daraja details</h2><button type="button" class="btn soft" onclick="guide()">Where do I find my business details?</button>
 <div class="seg">${seg('env',[['sandbox','Sandbox (testing)'],['live','Live']],s.env)}</div>
 <div class="seg">${seg('type',[['paybill','Paybill'],['till','Till']],s.type)}</div>
 <label><span id="l1"></span><input name="shortcode" inputmode="numeric" value="${esc(s.shortcode)}" required></label>
@@ -232,11 +236,19 @@ ${own?`<form class="card" onsubmit="save(event)"><h2>Daraja details</h2><button 
 <label>Consumer secret<small>Next to the key on the same page</small><input name="secret" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
 <label>Passkey<small>Sandbox: test data page. Live: emailed after Go Live</small><input name="passkey" type="password" autocomplete="off" placeholder="${ph}" ${rq}></label>
 <button class="btn" id="sv">Save and verify</button>
-<small>${me.verified?'Verified. You can send prompts.':'Prompts unlock once your details are verified.'}</small></form>
-<div class="card"><h2>Staff</h2><div id="stf"><small>Loading…</small></div></div>`:'<div class="card"><small>Payment details are managed by the business owner. Everything you send goes into the shared business till.</small></div>'}
-${standalone?'':installCard()}${soundCard()}${lockCard()}
-<div class="card"><h2>Telegram</h2>${me.telegram?'<small>Connected. Send your bot a message like <b>0712345678 500</b> to prompt a customer, and it replies with the result and your total today.</small><button class="btn ghost" onclick="tgOff()">Disconnect</button>':'<small>Connect your Telegram to send prompts from the bot and get results there.</small><button class="btn" onclick="tgOn()">Connect Telegram</button>'}</div>
-${helpCard()}<button class="btn ghost" onclick="logout()">Sign out</button>`;if(own){lab();loadStaff()}};
+<small>${me.verified?'Verified. You can send prompts.':'Prompts unlock once your details are verified.'}</small></form>`}
+function staffCard(){return '<div class="card"><h2>Staff</h2><div id="stf"><small>Loading…</small></div></div>'}
+function tgCard(){return `<div class="card"><h2>Telegram</h2>${me.telegram?'<small>Connected. Send your bot a message like <b>0712345678 500</b> to prompt a customer, and it replies with the result and your total today.</small><button class="btn ghost" onclick="tgOff()">Disconnect</button>':'<small>Connect your Telegram to send prompts from the bot and get results there.</small><button class="btn" onclick="tgOn()">Connect Telegram</button>'}</div>`}
+const SUBS={biz:bizCard,staff:staffCard,sound:soundCard,lock:lockCard,tg:tgCard,install:installCard,help:helpCard};
+const mi=(k,ic,t,d)=>`<button class="mi" onclick="go('${k}')"><span class="mic">${ic}</span><span><b>${t}</b><small>${d}</small></span><i>›</i></button>`;
+views.me=()=>{const own=me.role==='owner',v=$('#v');
+ if(sub&&SUBS[sub]&&(own||(sub!=='biz'&&sub!=='staff'))){v.innerHTML=`<button class="bk" onclick="go(null)">‹ Settings</button>${SUBS[sub]()}`;if(sub==='biz')lab();if(sub==='staff')loadStaff();return}
+ sub=null;
+ v.innerHTML=`<div class="card"><small>Signed in as ${own?'owner':'staff'}</small><b>${esc(me.email)}</b></div>
+${own?`<div class="grp">Business</div><div class="list">${mi('biz','🏪','Business details',me.verified?'Verified, ready for prompts':'Not set up yet')}${mi('staff','👥','Staff','Invite and manage staff')}</div>`:'<div class="note">Payment details are managed by the business owner. Everything you send goes into the shared business till.</div>'}
+<div class="grp">Preferences</div><div class="list">${mi('sound','🔔','Sounds',localStorage.mute?'Off':'On')}${mi('lock','🔒','App lock',LK()?'On':'Off')}${mi('tg','✈️','Telegram',me.telegram?'Connected':'Not connected')}</div>
+<div class="grp">More</div><div class="list">${standalone?'':mi('install','📲','Install app','Add to your home screen')}${mi('help','💬','Help','Call or WhatsApp')}</div>
+<button class="btn ghost" onclick="logout()">Sign out</button>`};
 async function loadStaff(){try{const{invite,staff}=await api('/api/staff');$('#stf').innerHTML=`<small>Share this code with a staff member. They enter it when creating their account, and their prompts go into your business.</small><div class="code">${invite?esc(invite):'No code yet'}</div><button class="btn soft" onclick="newInvite()">${invite?'Make a new code':'Create invite code'}</button>${staff.length?staff.map(s=>`<div class="row" style="cursor:default"><div><b>${esc(s.email)}</b></div><a onclick="stReset(${s.id})">Reset password</a><a style="color:var(--red)" onclick="stDel(${s.id})">Remove</a></div>`).join(''):'<small>No staff yet.</small>'}`}catch{}}
 async function newInvite(){await api('/api/staff/invite',{b:{}});loadStaff()}
 async function stReset(id){const r=await api('/api/staff/reset',{b:{id}});info('Temporary password',r.temp,'Give this to your staff member. They sign in with it, and their old sessions are signed out.')}
